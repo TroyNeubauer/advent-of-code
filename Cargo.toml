@@ -1,0 +1,12 @@
+[package]
+name = "advent-of-code"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "day1"
+path = "src/day1.rs"
+
+[dependencies]
+scanfmt = "0.1.0"
+reqwest = { version = "0.11.7", features = ["blocking"] }
