@@ -3,10 +3,12 @@ name = "advent-of-code"
 version = "0.1.0"
 edition = "2021"
 
-[[bin]]
-name = "day1"
-path = "src/day1.rs"
-
 [dependencies]
-scanfmt = "0.1.0"
-reqwest = { version = "0.11.7", features = ["blocking"] }
+clap = "3.0.0-beta.5"
+scanfmt = "0.1"
+reqwest = { version = "0.11.7", default-features = false, features = ["blocking", "cookies", "cookie_store", "rustls-tls"] }
+select = "0.5"
+chrono = "0.4"
+
+log = "0.4.14"
+env_logger = "0.9.0"

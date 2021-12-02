@@ -22,7 +22,7 @@ fn sum(data: &[u32], index: usize) -> u32 {
     data.iter().skip(index).take(3).sum()
 }
 
-fn main() {
+fn main3() {
 
     let input = String::from_utf8(fs::read("input.txt").unwrap()).unwrap();
     //let input = [199, 200, 208, 210, 200, 207, 240, 269, 260, 263];
@@ -41,3 +41,4 @@ fn main() {
     }
     println!("Count {}", count);
 }
+
