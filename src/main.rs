@@ -1,6 +1,9 @@
+
+mod util;
+mod traits;
+
 mod day1;
 mod day2;
-mod util;
 
 use chrono::Datelike;
 use clap::Parser;
@@ -36,8 +39,6 @@ fn main() {
             info!("Overriding year to be {}", year);
         }
         opts.year = Some(year);
-
-        //Try do download puzzel input if it doesnt exist already
     }
 
     let day = opts
@@ -48,7 +49,13 @@ fn main() {
         .expect("Year not supplied. Use --run, or set day with --year");
     info!("Running year: {}, day {}", day, year);
 
-    let data = util::save_data(year, day, false);
+    let mut problems = util::Problems::new("53616c7465645f5f6203c384f07e9cc2617db3460d5d53b661952e5f45a1ff1125c25fb628c32313e0d43d85be024439".to_string());
+    //let mut problems = util::Problems::load().unwrap();
+
+    let data = problems.lookup(util::Day { year, day }, false);
+    println!("{}", data.input);
+
+    problems.save().unwrap();
 }
 
 /// This doc string acts as a help message when the user runs '--help'

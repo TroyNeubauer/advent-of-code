@@ -1,44 +1,37 @@
-use std::{collections::HashMap, fs};
 
-fn main2() {
-    let input = String::from_utf8(fs::read("input.txt").unwrap()).unwrap();
-    //let input = [199, 200, 208, 210, 200, 207, 240, 269, 260, 263];
-    let input: Vec<_> = input
-        .lines()
-        .filter_map(|line| line.parse::<u32>().ok())
-        .collect();
+use crate::traits::AocDay;
 
-    let mut count = 0;
-    for i in 0..input.len() - 1 {
-        if input[i + 1] > input[i] {
-            count += 1;
+struct Day1;
+
+impl AocDay for Day1 {
+    fn part1(input: crate::traits::Input) -> Result<crate::traits::Output, crate::traits::Error> {
+        let input: Vec<u32> = input.nums();
+
+        let mut count = 0;
+        for i in 0..input.len() - 1 {
+            if input[i + 1] > input[i] {
+                count += 1;
+            }
         }
+
+        Ok(count.into())
     }
 
-    println!("{}", count);
+    fn part2(input: crate::traits::Input) -> Result<crate::traits::Output, crate::traits::Error> {
+        let input = input.nums();
+        let mut count = 0;
+        for i in 0..input.len() {
+            let first = sum(&input, i);
+            let second = sum(&input, i + 1);
+            if second > first {
+                count += 1;
+            }
+        }
+        Ok(count.into())
+    }
 }
 
 fn sum(data: &[u32], index: usize) -> u32 {
     data.iter().skip(index).take(3).sum()
-}
-
-fn main3() {
-
-    let input = String::from_utf8(fs::read("input.txt").unwrap()).unwrap();
-    //let input = [199, 200, 208, 210, 200, 207, 240, 269, 260, 263];
-    let input: Vec<_> = input
-        .lines()
-        .filter_map(|line| line.parse::<u32>().ok())
-        .collect();
-
-    let mut count = 0;
-    for i in 0..input.len() {
-        let first = sum(&input, i);
-        let second = sum(&input, i + 1);
-        if second > first {
-            count += 1;
-        }
-    }
-    println!("Count {}", count);
 }
 
