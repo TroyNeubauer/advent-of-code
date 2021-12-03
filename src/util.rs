@@ -1,8 +1,8 @@
-use chrono::{Datelike, Duration};
+use chrono::Datelike;
 use log::*;
 use select::document::Document;
 use select::node::Node;
-use select::predicate::{Attr, Class, Name, Predicate, Text};
+use select::predicate::{Attr, Name, Predicate};
 use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
@@ -12,14 +12,18 @@ use crate::traits::Error;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Test {
+    #[serde(rename = "in")]
     pub input: String,
+    #[serde(rename = "out")]
     pub expected_output: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Data {
     pub input: String,
+    #[serde(rename = "p1")]
     pub part1_tests: Vec<Test>,
+    #[serde(rename = "p2")]
     pub part2_tests: Option<Vec<Test>>,
 }
 
@@ -31,11 +35,16 @@ pub struct Day {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Problems {
-    days: HashMap<Day, Data>,
+    /// Mapping of years to days to problem data
+    //TODO: Make better once serde_fs supports more types as keys
+    years: HashMap<u32, HashMap<u32, Data>>,
     session: String,
 }
 
-fn parse_tests(desc_body: &str, part2: bool) -> Result<(Vec<Test>, Option<Vec<Test>>), Error> {
+fn parse_tests(
+    desc_body: &str,
+    part2_enabled: bool,
+) -> Result<(Vec<Test>, Option<Vec<Test>>), Error> {
     let document = Document::from(desc_body);
 
     let mut test_inputs = Vec::new();
@@ -51,19 +60,6 @@ fn parse_tests(desc_body: &str, part2: bool) -> Result<(Vec<Test>, Option<Vec<Te
         .filter_map(|s| s.text().parse::<u32>().ok().map(|_| s))
         .collect();
 
-    if test_solutions.is_empty() || part2 && test_solutions.len() == 1 {
-        error!(
-            "Unable to find solutions for tests. Solutions: {:?}",
-            test_solutions
-        );
-        std::process::exit(1);
-    }
-
-    if test_inputs.len() != 1 {
-        error!("Unable to find examples for tests. Please fill in the files in `input-cache`");
-        error!("Segments: {:?}", test_inputs);
-        std::process::exit(1);
-    }
     let part2: Vec<_> = document.find(Name("h2").and(Attr("id", "part2"))).collect();
     if part2.len() > 1 {
         error!("Found multiple elements with the part2 tag");
@@ -72,31 +68,67 @@ fn parse_tests(desc_body: &str, part2: bool) -> Result<(Vec<Test>, Option<Vec<Te
     }
     let part2 = part2.get(0);
 
-    println!("test_inputs: {:?}", test_inputs);
-    println!("test_solutions: {:?}", test_solutions);
-    println!("part2: {:?}", part2);
-
-    let filter
-
-    match part2 {
-        Some(part2) => Err("oeu".into()),
-        None => {
-            let part1_tests = test_inputs
-                .into_iter()
-                .zip(test_solutions)
-                .map(|(i, o)| {
-                    //Make sure that the output comes after the input
-                    println!("{:?} {:?}", i, o);
-                    Test {
-                        input: i.text(),
-                        expected_output: o.text(),
-                    }
-                })
-                .collect();
-
-            Ok((part1_tests, None))
+    if test_inputs.len() == 0 {
+        error!("Unable to find examples for tests. Please fill in the files in `input-cache`");
+        error!("Segments: {:?}", test_inputs);
+        std::process::exit(1);
+    }
+    // Duplicate the test input if later tests are missing it
+    // (most challenges share the same test input)
+    for (i, test) in test_solutions.iter().enumerate() {
+        if test_inputs.get(i).is_none() {
+            if let Some(part2) = part2 {
+                if test.index() < part2.index() {
+                    error!("Found duplicate part 1 input!");
+                    error!("inputs: {:?}", test_inputs);
+                    error!("outputs: {:?}", test_solutions);
+                    std::process::exit(1);
+                }
+            }
+            debug_assert_eq!(i, test_inputs.len());
+            let to_add = test_inputs[test_inputs.len() - 1].clone();
+            info!("Duplicating input: `{}`", to_add.text());
+            test_inputs.push(to_add);
         }
     }
+
+    if test_solutions.is_empty() || part2_enabled && test_solutions.len() == 1 {
+        warn!(
+            "Unable to find solutions for tests. Solutions: {:?}",
+            test_solutions
+        );
+    }
+
+    debug!("test_inputs: {:?}", test_inputs);
+    debug!("test_solutions: {:?}", test_solutions);
+
+    let mut part1_tests = Vec::new();
+    let mut part2_tests = Vec::new();
+
+    test_inputs
+        .into_iter()
+        .zip(test_solutions)
+        .for_each(|(input, output)| {
+            //Make sure that the output comes after the input
+            assert!(input.index() < output.index());
+            let test = Test {
+                input: input.text(),
+                expected_output: output.text(),
+            };
+            match part2 {
+                //If we know where part 2 starts in the html, and we are after it, then this is a
+                //part 2 test
+                Some(part) if output.index() > part.index() => part2_tests.push(test),
+                _ => part1_tests.push(test),
+            }
+        });
+
+    let part2_tests = if part2_tests.is_empty() {
+        None
+    } else {
+        Some(part2_tests)
+    };
+    Ok((part1_tests, part2_tests))
 }
 
 fn wait_for_time(day: Day) {
@@ -106,18 +138,10 @@ fn wait_for_time(day: Day) {
         let publish_time =
             chrono::NaiveDate::from_ymd(day.year as i32, 12, day.day).and_hms(0, 0, 0);
         let sleep_time = publish_time - now;
-        println!("Challenge published in {:?}", sleep_time);
+        info!("Challenge publishing in {:?}", sleep_time);
         //Sleep until 100 ms before the challenge comes out
-        std::thread::sleep((sleep_time - Duration::milliseconds(100)).to_std().unwrap());
-        info!("Awoke for challenge");
-        loop {
-            let now = chrono::Local::now().naive_local();
-            if now > publish_time {
-                break;
-            }
-            //Spin loop until its time
-            std::hint::spin_loop();
-        }
+        std::thread::sleep(sleep_time.to_std().unwrap());
+        info!("Awoke for challenge"); 
     }
 }
 
@@ -135,16 +159,23 @@ fn build_client(session: &str) -> Result<reqwest::blocking::Client, Error> {
 
 impl Problems {
     pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let mut s = flexbuffers::FlexbufferSerializer::new();
-        self.serialize(&mut s)?;
-
+        let _ = std::fs::remove_dir_all("./.problems");
+        serde_fs::to_fs(&self, "./.problems")?;
         Ok(())
     }
 
-    pub fn lookup(&mut self, day: Day, part2: bool) -> Data {
-        if let Some(data) = self.days.get(&day).cloned() {
+    fn get(&self, day: Day) -> Option<&Data> {
+        if let Some(years) = self.years.get(&day.year) {
+            return years.get(&day.day);
+        }
+        None
+    }
+
+    pub fn lookup(&mut self, day: Day, part2_required: bool) -> Data {
+        if let Some(data) = self.get(day).cloned() {
             //We already have the data we need
-            if !part2 || part2 && data.part2_tests.is_some() {
+            if !part2_required || part2_required && data.part2_tests.is_some() {
+                info!("We already have the data for this stage of the problem");
                 return data;
             }
         }
@@ -161,9 +192,12 @@ impl Problems {
                 continue;
             }
 
-            let (part1_tests, part2_tests) = parse_tests(&desc_body, part2).unwrap();
+            let (part1_tests, part2_tests) = parse_tests(&desc_body, part2_required).unwrap();
 
-            let data = self.days.entry(day).or_insert_with(|| {
+            let years = self.years.entry(day.year).or_insert_with(|| HashMap::new());
+
+            let data = years.entry(day.day).or_insert_with(|| {
+                info!("Downloading input for year {} day {}", day.year, day.day);
                 let input_url = format!(
                     "https://adventofcode.com/{}/day/{}/input",
                     day.year, day.day
@@ -171,6 +205,8 @@ impl Problems {
                 let input = client.get(input_url).send().unwrap().text().unwrap();
                 Data {
                     part1_tests,
+                    //This only runs the first time when part2_tests is None so thats why the clone
+                    //is here
                     part2_tests: part2_tests.clone(),
                     input,
                 }
@@ -182,15 +218,12 @@ impl Problems {
     }
 
     pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
-        let bytes = std::fs::read("./problems.data")?;
-        let reader = flexbuffers::Reader::get_root(bytes.as_slice())?;
-
-        Ok(Self::deserialize(reader)?)
+        Ok(serde_fs::from_fs("./.problems")?)
     }
 
     pub fn new(session: String) -> Self {
         Self {
-            days: HashMap::new(),
+            years: HashMap::new(),
             session,
         }
     }

@@ -1,10 +1,9 @@
+use crate::traits::*;
 
-use crate::traits::AocDay;
+pub struct S;
 
-struct Day1;
-
-impl AocDay for Day1 {
-    fn part1(input: crate::traits::Input) -> Result<crate::traits::Output, crate::traits::Error> {
+impl AocDay for S {
+    fn part1(&self, input: crate::traits::Input) -> Output {
         let input: Vec<u32> = input.nums();
 
         let mut count = 0;
@@ -14,24 +13,25 @@ impl AocDay for Day1 {
             }
         }
 
-        Ok(count.into())
+        count.into()
     }
 
-    fn part2(input: crate::traits::Input) -> Result<crate::traits::Output, crate::traits::Error> {
+    fn part2(&self, input: crate::traits::Input) -> Output {
         let input = input.nums();
         let mut count = 0;
+        dbg!(&input);
         for i in 0..input.len() {
             let first = sum(&input, i);
             let second = sum(&input, i + 1);
+            dbg!(first, second);
             if second > first {
                 count += 1;
             }
         }
-        Ok(count.into())
+        count.into()
     }
 }
 
 fn sum(data: &[u32], index: usize) -> u32 {
     data.iter().skip(index).take(3).sum()
 }
-
