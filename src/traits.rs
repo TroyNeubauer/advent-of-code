@@ -1,8 +1,14 @@
-use std::str::{FromStr, Lines, Split};
+use std::str::{FromStr, Lines};
+
+pub use std::collections::HashMap;
+pub use crate::helper::*;
 
 pub type Error = Box<dyn std::error::Error>;
 
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Input(String);
+
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Output(String);
 
 pub trait AocDay {

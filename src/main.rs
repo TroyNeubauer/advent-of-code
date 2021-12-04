@@ -1,6 +1,8 @@
 mod traits;
 mod util;
 mod years;
+mod helper;
+
 use util::{Problems, Day};
 
 use traits::AocDay;
@@ -31,7 +33,6 @@ fn run(problems: &mut Problems, data: RunData) {
 
     let mut tests_required = true;
     if data.running_all && MANUAL_TEST_DAYS.contains(&Day { year, day }) {
-        info!("Tests are not required for {}", day);
         tests_required = false;
     }
 
@@ -42,6 +43,7 @@ fn run(problems: &mut Problems, data: RunData) {
     let run_part = |test: &Option<util::Test>, part1, name| {
         match test {
             None => {
+                info!("Not running test for {} {}", day, name); 
                 if data.auto_submit {
                     error!("Refusing to auto submit without tests. Please fill in manually");
                     return;
@@ -202,7 +204,7 @@ fn main() {
 
     let to_run = if opts.all {
         let mut to_run = Vec::new();
-        let years = vec![(2020, 1..=8), (2021, 1..=4)];
+        let years = vec![(2020, 1..=16), (2021, 1..=4)];
         for (year, range) in years {
             for day in range {
                 to_run.push(Day { year, day });
@@ -234,6 +236,14 @@ fn main() {
                 6 => Box::new(y2020::day6::S),
                 7 => Box::new(y2020::day7::S),
                 8 => Box::new(y2020::day8::S),
+                9 => Box::new(y2020::day9::S),
+                10 => Box::new(y2020::day10::S),
+                11 => Box::new(y2020::day11::S),
+                12 => Box::new(y2020::day12::S),
+                13 => Box::new(y2020::day13::S),
+                14 => Box::new(y2020::day14::S),
+                15 => Box::new(y2020::day15::S),
+                16 => Box::new(y2020::day16::S),
                 _ => panic!("Unknown day {}, for year {}", day, year),
             },
             2021 => match day {

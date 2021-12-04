@@ -192,7 +192,7 @@ fn parse_tests(
     // input. For example 2020 day 1 part 2 has example input with markup that doesn't parse.
     // However we cant re-use all part 1 test input for part 2, because some challenges have a
     // different part 2 input on purpose
-    const USE_PART1_INPUT_OVERRIDE: [Day; 1] = [Day { year: 2021, day: 1 }];
+    const USE_PART1_INPUT_OVERRIDE: [Day; 2] = [Day { year: 2021, day: 1 }, Day { year: 2021, day: 10 }];
     if USE_PART1_INPUT_OVERRIDE.contains(&day) {
         if let Some(p1) = &test1 {
             if let Some(p2) = &mut test2 {
@@ -311,10 +311,4 @@ impl Problems {
             session,
         }
     }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test1() {}
 }
