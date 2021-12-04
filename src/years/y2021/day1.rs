@@ -19,11 +19,9 @@ impl AocDay for S {
     fn part2(&self, input: crate::traits::Input) -> Output {
         let input = input.nums();
         let mut count = 0;
-        dbg!(&input);
         for i in 0..input.len() {
             let first = sum(&input, i);
             let second = sum(&input, i + 1);
-            dbg!(first, second);
             if second > first {
                 count += 1;
             }

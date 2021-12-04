@@ -22,9 +22,9 @@ pub struct Test {
 pub struct Data {
     pub input: String,
     #[serde(rename = "p1")]
-    pub part1_tests: Vec<Test>,
+    pub part1: Option<Test>,
     #[serde(rename = "p2")]
-    pub part2_tests: Option<Vec<Test>>,
+    pub part2: Option<Test>,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
@@ -33,18 +33,41 @@ pub struct Day {
     pub day: u32,
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+enum Part {
+    Part1,
+    Part2,
+}
+
+impl std::fmt::Display for Part {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        let s = match *self {
+            Part::Part1 => "part1",
+            Part::Part2 => "part2",
+        };
+        f.write_str(s)
+    }
+}
+
+impl std::fmt::Display for Day {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        f.write_fmt(format_args!("{} day {}", self.year, self.day))
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Problems {
     /// Mapping of years to days to problem data
     //TODO: Make better once serde_fs supports more types as keys
     years: HashMap<u32, HashMap<u32, Data>>,
-    session: String,
+    pub session: String,
 }
 
 fn parse_tests(
     desc_body: &str,
-    part2_enabled: bool,
-) -> Result<(Vec<Test>, Option<Vec<Test>>), Error> {
+    day: Day,
+    tests_required: bool,
+) -> Result<(Option<Test>, Option<Test>), Error> {
     let document = Document::from(desc_body);
 
     let mut test_inputs = Vec::new();
@@ -55,7 +78,7 @@ fn parse_tests(
         }
     }
 
-    let test_solutions: Vec<Node> = document
+    let test_outputs: Vec<Node> = document
         .find(Name("em"))
         .filter_map(|s| s.text().parse::<u32>().ok().map(|_| s))
         .collect();
@@ -64,71 +87,121 @@ fn parse_tests(
     if part2.len() > 1 {
         error!("Found multiple elements with the part2 tag");
         error!("Elements: {:?}", part2);
+        error!("Exiting!");
         std::process::exit(1);
     }
     let part2 = part2.get(0);
 
     if test_inputs.len() == 0 {
         error!("Unable to find examples for tests. Please fill in the files in `input-cache`");
-        error!("Segments: {:?}", test_inputs);
-        std::process::exit(1);
-    }
-    // Duplicate the test input if later tests are missing it
-    // (most challenges share the same test input)
-    for (i, test) in test_solutions.iter().enumerate() {
-        if test_inputs.get(i).is_none() {
-            if let Some(part2) = part2 {
-                if test.index() < part2.index() {
-                    error!("Found duplicate part 1 input!");
-                    error!("inputs: {:?}", test_inputs);
-                    error!("outputs: {:?}", test_solutions);
-                    std::process::exit(1);
-                }
-            }
-            debug_assert_eq!(i, test_inputs.len());
-            let to_add = test_inputs[test_inputs.len() - 1].clone();
-            info!("Duplicating input: `{}`", to_add.text());
-            test_inputs.push(to_add);
+        error!("Possible Solutions: {:?}", test_outputs);
+        if tests_required {
+            return Err("Failed parse any tests".into());
         }
     }
 
-    if test_solutions.is_empty() || part2_enabled && test_solutions.len() == 1 {
-        warn!(
-            "Unable to find solutions for tests. Solutions: {:?}",
-            test_solutions
-        );
+    let mut part1_inputs = Vec::new();
+    let mut part1_outputs = Vec::new();
+
+    let mut part2_inputs = Vec::new();
+    let mut part2_outputs = Vec::new();
+
+    for input in test_inputs {
+        match part2 {
+            //If we know where part 2 starts in the html, and we are after it, then this is a
+            //part 2 test
+            Some(part) if input.index() > part.index() => part2_inputs.push(input),
+            _ => part1_inputs.push(input),
+        }
     }
 
-    debug!("test_inputs: {:?}", test_inputs);
-    debug!("test_solutions: {:?}", test_solutions);
+    for output in test_outputs {
+        match part2 {
+            //If we know where part 2 starts in the html, and we are after it, then this is a
+            //part 2 test
+            Some(part) if output.index() > part.index() => part2_outputs.push(output),
+            _ => part1_outputs.push(output),
+        }
+    }
 
-    let mut part1_tests = Vec::new();
-    let mut part2_tests = Vec::new();
+    let zip_tests = |mut inputs: Vec<Node>,
+                     mut outputs: Vec<Node>,
+                     copy_from_inputs: Option<&Vec<Node>>,
+                     part| {
+        if inputs.is_empty() && outputs.is_empty() {
+            warn!(
+                "Failed to detect any test input or output for {} {}",
+                day, part
+            );
+            None
+        } else if !inputs.is_empty() && outputs.is_empty() {
+            warn!("Failed to detect test output for {} {}", day, part);
+            None
+        } else if inputs.is_empty() && !outputs.is_empty() {
+            if copy_from_inputs.is_some() && !copy_from_inputs.unwrap().is_empty() {
+                //We are missing input, however we are allowed to steal from `copy_from_inputs`
+                info!("Getting part 2 test input from part 1 for {}", day);
+                let copy = copy_from_inputs.unwrap();
+                let input = copy[copy.len() - 1].clone();
 
-    test_inputs
-        .into_iter()
-        .zip(test_solutions)
-        .for_each(|(input, output)| {
-            //Make sure that the output comes after the input
+                let output = outputs.remove(outputs.len() - 1);
+                assert!(input.index() < output.index());
+
+                Some(Test {
+                    input: input.text(),
+                    expected_output: output.text(),
+                })
+            } else {
+                warn!("Failed to detect test input for {} {}", day, part);
+                None
+            }
+        } else {
+            //Sometimes we have to override which piece of output we get the input from
+            const INPUT_INDEX_OVERRIDE_DAYS: [Day; 1] = [Day { year: 2020, day: 8 }];
+            const INPUT_INDEX_OVERRIDE_PART: [Part; 1] = [Part::Part1];
+            const INPUT_INDEX_OVERRIDE_VALUES: [usize; 1] = [2];
+
+            let mut input_index = 1;
+            for (i, candidate) in INPUT_INDEX_OVERRIDE_DAYS.iter().enumerate() {
+                if *candidate == day && INPUT_INDEX_OVERRIDE_PART[i] == part {
+                    input_index = INPUT_INDEX_OVERRIDE_VALUES[i];
+                    break;
+                }
+            }
+
+            let input = inputs.remove(inputs.len() - input_index);
+            let output = outputs.remove(outputs.len() - 1);
             assert!(input.index() < output.index());
-            let test = Test {
+
+            Some(Test {
                 input: input.text(),
                 expected_output: output.text(),
-            };
-            match part2 {
-                //If we know where part 2 starts in the html, and we are after it, then this is a
-                //part 2 test
-                Some(part) if output.index() > part.index() => part2_tests.push(test),
-                _ => part1_tests.push(test),
-            }
-        });
-
-    let part2_tests = if part2_tests.is_empty() {
-        None
-    } else {
-        Some(part2_tests)
+            })
+        }
     };
-    Ok((part1_tests, part2_tests))
+
+    let mut test2 = zip_tests(
+        part2_inputs,
+        part2_outputs,
+        Some(&part1_inputs),
+        Part::Part2,
+    );
+    let test1 = zip_tests(part1_inputs.clone(), part1_outputs, None, Part::Part1);
+
+    // For some challenges we want to re-use the part 1 test input, even though we get valid part 2
+    // input. For example 2020 day 1 part 2 has example input with markup that doesn't parse.
+    // However we cant re-use all part 1 test input for part 2, because some challenges have a
+    // different part 2 input on purpose
+    const USE_PART1_INPUT_OVERRIDE: [Day; 1] = [Day { year: 2021, day: 1 }];
+    if USE_PART1_INPUT_OVERRIDE.contains(&day) {
+        if let Some(p1) = &test1 {
+            if let Some(p2) = &mut test2 {
+                info!("Re-using part 1 test input for part 2");
+                p2.input = p1.input.clone();
+            }
+        }
+    }
+    Ok((test1, test2))
 }
 
 fn wait_for_time(day: Day) {
@@ -141,11 +214,11 @@ fn wait_for_time(day: Day) {
         info!("Challenge publishing in {:?}", sleep_time);
         //Sleep until 100 ms before the challenge comes out
         std::thread::sleep(sleep_time.to_std().unwrap());
-        info!("Awoke for challenge"); 
+        info!("Awoke for challenge");
     }
 }
 
-fn build_client(session: &str) -> Result<reqwest::blocking::Client, Error> {
+pub fn build_client(session: &str) -> Result<reqwest::blocking::Client, Error> {
     let jar = Arc::new(reqwest::cookie::Jar::default());
     jar.add_cookie_str(
         &format!("session={}", session),
@@ -171,20 +244,31 @@ impl Problems {
         None
     }
 
-    pub fn lookup(&mut self, day: Day, part2_required: bool) -> Data {
+    pub fn lookup(&mut self, day: Day, part2_required: bool, tests_required: bool) -> Data {
+        match self.try_lookup(day, part2_required, tests_required) {
+            Ok(data) => data,
+            Err(err) => panic!("Failed to download data for {}: {:?}", day, err),
+        }
+    }
+
+    pub fn try_lookup(
+        &mut self,
+        day: Day,
+        part2_required: bool,
+        tests_required: bool,
+    ) -> Result<Data, Error> {
         if let Some(data) = self.get(day).cloned() {
             //We already have the data we need
-            if !part2_required || part2_required && data.part2_tests.is_some() {
-                info!("We already have the data for this stage of the problem");
-                return data;
+            if !part2_required || part2_required && data.part2.is_some() {
+                return Ok(data);
             }
         }
         loop {
             wait_for_time(day);
-            let client = build_client(self.session.as_str()).unwrap();
+            let client = build_client(self.session.as_str())?;
 
             let description_url = format!("https://adventofcode.com/{}/day/{}", day.year, day.day);
-            let desc_body = client.get(description_url).send().unwrap().text().unwrap();
+            let desc_body = client.get(description_url).send()?.text()?;
 
             if desc_body.contains("the link will be enabled on the calendar the instant this puzzle becomes available") {
                 //Try again in a little bit
@@ -192,28 +276,28 @@ impl Problems {
                 continue;
             }
 
-            let (part1_tests, part2_tests) = parse_tests(&desc_body, part2_required).unwrap();
+            let (part1, part2) = parse_tests(&desc_body, day, tests_required)?;
 
             let years = self.years.entry(day.year).or_insert_with(|| HashMap::new());
 
             let data = years.entry(day.day).or_insert_with(|| {
-                info!("Downloading input for year {} day {}", day.year, day.day);
+                info!("Downloading input for {}", day);
                 let input_url = format!(
                     "https://adventofcode.com/{}/day/{}/input",
                     day.year, day.day
                 );
                 let input = client.get(input_url).send().unwrap().text().unwrap();
                 Data {
-                    part1_tests,
+                    part1,
                     //This only runs the first time when part2_tests is None so thats why the clone
                     //is here
-                    part2_tests: part2_tests.clone(),
+                    part2: part2.clone(),
                     input,
                 }
             });
-            data.part2_tests = part2_tests;
+            data.part2 = part2;
 
-            break data.clone();
+            break Ok(data.clone());
         }
     }
 

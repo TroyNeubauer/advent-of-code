@@ -1,4 +1,4 @@
-use std::str::{FromStr, Lines};
+use std::str::{FromStr, Lines, Split};
 
 pub type Error = Box<dyn std::error::Error>;
 
@@ -26,7 +26,7 @@ impl Input {
 
     pub fn lines(&self) -> Lines {
         self.0.lines()
-    }
+    } 
 
     pub fn as_str(&self) -> &str {
         self.0.as_str()

@@ -1,5 +1,4 @@
 use crate::traits::*;
-use log::*;
 
 pub struct S;
 
