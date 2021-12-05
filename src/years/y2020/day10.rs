@@ -35,7 +35,6 @@ impl crate::traits::AocDay for S {
             let now = nums[i];
             let last = nums[i - 1];
             let diff = now - last;
-            println!("diff {}", diff);
             match map.get(&diff).cloned() {
                 Some(value) => map.insert(diff, value + 1),
                 None => map.insert(diff, 1),
