@@ -157,11 +157,11 @@ fn parse_tests(
             }
         } else {
             //Sometimes we have to override which piece of output we get the input from
-            const INPUT_INDEX_OVERRIDE_DAYS: [Day; 1] = [Day { year: 2020, day: 8 }];
-            const INPUT_INDEX_OVERRIDE_PART: [Part; 1] = [Part::Part1];
-            const INPUT_INDEX_OVERRIDE_VALUES: [usize; 1] = [2];
+            const INPUT_INDEX_OVERRIDE_DAYS: [Day; 0] = [];
+            const INPUT_INDEX_OVERRIDE_PART: [Part; 0] = [];
+            const INPUT_INDEX_OVERRIDE_VALUES: [usize; 0] = [];
 
-            let mut input_index = 1;
+            let mut input_index = 0;
             for (i, candidate) in INPUT_INDEX_OVERRIDE_DAYS.iter().enumerate() {
                 if *candidate == day && INPUT_INDEX_OVERRIDE_PART[i] == part {
                     input_index = INPUT_INDEX_OVERRIDE_VALUES[i];
@@ -169,7 +169,7 @@ fn parse_tests(
                 }
             }
 
-            let input = inputs.remove(inputs.len() - input_index);
+            let input = inputs.remove(input_index);
             let output = outputs.remove(outputs.len() - 1);
             assert!(input.index() < output.index());
 
@@ -192,7 +192,14 @@ fn parse_tests(
     // input. For example 2020 day 1 part 2 has example input with markup that doesn't parse.
     // However we cant re-use all part 1 test input for part 2, because some challenges have a
     // different part 2 input on purpose
-    const USE_PART1_INPUT_OVERRIDE: [Day; 2] = [Day { year: 2021, day: 1 }, Day { year: 2021, day: 10 }];
+    const USE_PART1_INPUT_OVERRIDE: [Day; 3] = [
+        Day { year: 2021, day: 1 },
+        Day {
+            year: 2020,
+            day: 11,
+        },
+        Day { year: 2021, day: 5 },
+    ];
     if USE_PART1_INPUT_OVERRIDE.contains(&day) {
         if let Some(p1) = &test1 {
             if let Some(p2) = &mut test2 {

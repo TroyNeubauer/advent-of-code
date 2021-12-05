@@ -1,9 +1,9 @@
+mod helper;
 mod traits;
 mod util;
 mod years;
-mod helper;
 
-use util::{Problems, Day};
+use util::{Day, Problems};
 
 use traits::AocDay;
 use years::*;
@@ -29,7 +29,7 @@ fn run(problems: &mut Problems, data: RunData) {
     // The days that are known to not have parsable tests
     // When we are running all tests then don't require tests on these days so that we don't hold up
     // running everything when tests are eventually not parsed from the prose
-    const MANUAL_TEST_DAYS: [Day; 1] = [ Day { year: 2020, day: 5 } ];
+    const MANUAL_TEST_DAYS: [Day; 1] = [Day { year: 2020, day: 5 }];
 
     let mut tests_required = true;
     if data.running_all && MANUAL_TEST_DAYS.contains(&Day { year, day }) {
@@ -43,7 +43,7 @@ fn run(problems: &mut Problems, data: RunData) {
     let run_part = |test: &Option<util::Test>, part1, name| {
         match test {
             None => {
-                info!("Not running test for {} {}", day, name); 
+                info!("Not running test for {} {}", day, name);
                 if data.auto_submit {
                     error!("Refusing to auto submit without tests. Please fill in manually");
                     return;
@@ -59,6 +59,7 @@ fn run(problems: &mut Problems, data: RunData) {
 
                 let expected = test.expected_output.trim();
                 let output = output.into_inner();
+                info!("{} - {}", expected, &output);
                 if expected != output {
                     if data.running_all {
                         error!(
