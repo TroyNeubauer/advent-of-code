@@ -1,7 +1,7 @@
 use std::str::{FromStr, Lines};
 
-pub use std::collections::HashMap;
 pub use crate::helper::*;
+pub use std::collections::HashMap;
 
 pub type Error = Box<dyn std::error::Error>;
 
@@ -21,6 +21,21 @@ impl Input {
         Self(inner)
     }
 
+    pub fn nums_comma_separated<T>(&self) -> Vec<T>
+    where
+        T: FromStr,
+    {
+        self.0
+            .trim()
+            .split(',')
+            .enumerate()
+            .map(|(i, token)| match token.parse::<T>() {
+                Ok(v) => v,
+                Err(_err) => panic!("Failed to parse `{}` (num #{})", token, i),
+            })
+            .collect()
+    }
+
     pub fn nums<T>(&self) -> Vec<T>
     where
         T: FromStr,
@@ -32,7 +47,7 @@ impl Input {
 
     pub fn lines(&self) -> Lines {
         self.0.lines()
-    } 
+    }
 
     pub fn as_str(&self) -> &str {
         self.0.as_str()

@@ -109,7 +109,12 @@ fn run(problems: &mut Problems, data: RunData) {
             let text = res.text().unwrap();
             if text.contains("You don't seem to be solving the right level") {
                 info!("Looks like this problem has already been submitted");
-            } else {
+            } else if text.contains("That's the right answer!") {
+                println!("That's the right answer!");
+            } else if text.contains("That's not the right answer.") {
+                println!("That's not the right answer.");
+            }
+            else {
                 info!("Server returned unknown response: {}", &text);
                 use rand::Rng;
                 let num: u32 = rand::thread_rng().gen();

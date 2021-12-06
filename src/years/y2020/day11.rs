@@ -44,7 +44,7 @@ impl crate::traits::AocDay for S {
 
     fn part2(&self, input: Input) -> Output {
         let input: Matrix<u8> = Matrix::new_from_chars(input.as_str()).unwrap();
-        input.print_with(|s| *s as char);
+        //input.print_with(|s| *s as char);
         let cols = input.cols();
         let mut last_mat = Shifter::<Matrix<_>, 1>::new(input);
         let mut i = 0;
@@ -98,7 +98,7 @@ impl crate::traits::AocDay for S {
             };
 
             let new_seats: Matrix<u8> = Matrix::new_from_iterator(cols, it);
-            new_seats.print_with(|s| *s as char);
+            //new_seats.print_with(|s| *s as char);
             let last = last_mat.shift(new_seats);
 
             i += 1;

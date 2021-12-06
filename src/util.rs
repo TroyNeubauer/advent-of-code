@@ -72,10 +72,7 @@ fn parse_tests(
 
     let mut test_inputs = Vec::new();
     for node in document.find(Name("pre").descendant(Name("code"))) {
-        let children: Vec<_> = node.children().collect();
-        if children.len() == 1 && children[0].children().next().is_none() {
-            test_inputs.push(node);
-        }
+        test_inputs.push(node);
     }
 
     let test_outputs: Vec<Node> = document
@@ -92,8 +89,8 @@ fn parse_tests(
     }
     let part2 = part2.get(0);
 
-    if test_inputs.len() == 0 {
-        error!("Unable to find examples for tests. Please fill in the files in `input-cache`");
+    if test_inputs.is_empty() {
+        error!("Unable to find examples for tests. Please fill in the files in `.problems`");
         error!("Possible Solutions: {:?}", test_outputs);
         if tests_required {
             return Err("Failed parse any tests".into());
@@ -142,7 +139,7 @@ fn parse_tests(
                 //We are missing input, however we are allowed to steal from `copy_from_inputs`
                 info!("Getting part 2 test input from part 1 for {}", day);
                 let copy = copy_from_inputs.unwrap();
-                let input = copy[copy.len() - 1].clone();
+                let input = copy[copy.len() - 1];
 
                 let output = outputs.remove(outputs.len() - 1);
                 assert!(input.index() < output.index());
@@ -157,9 +154,9 @@ fn parse_tests(
             }
         } else {
             //Sometimes we have to override which piece of output we get the input from
-            const INPUT_INDEX_OVERRIDE_DAYS: [Day; 1] = [ Day { year: 2020, day: 10 } ];
-            const INPUT_INDEX_OVERRIDE_PART: [Part; 1] = [ Part::Part1 ];
-            const INPUT_INDEX_OVERRIDE_VALUES: [usize; 1] = [ 1 ];
+            const INPUT_INDEX_OVERRIDE_DAYS: [Day; 2] = [ Day { year: 2020, day: 10 }, Day { year: 2020, day: 16 } ];
+            const INPUT_INDEX_OVERRIDE_PART: [Part; 2] = [ Part::Part1, Part::Part1 ];
+            const INPUT_INDEX_OVERRIDE_VALUES: [usize; 2] = [ 1, 1 ];
 
             let mut input_index = 0;
             for (i, candidate) in INPUT_INDEX_OVERRIDE_DAYS.iter().enumerate() {

@@ -16,3 +16,4 @@ env_logger = "0.9"
 serde_fs = { path = "../serde_fs/" }
 nom = "7.1.0"
 rand = "0.8"
+vector2d = "2.2.0"

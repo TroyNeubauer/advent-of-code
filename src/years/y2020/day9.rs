@@ -50,10 +50,8 @@ impl crate::traits::AocDay for S {
             while sum < bad {
                 sum += nums[j];
                 if sum == bad {
-                    println!("found range {}..{}", i, j);
                     let min: usize = *nums[i..j].iter().min().unwrap();
                     let max: usize = *nums[i..j].iter().max().unwrap();
-                    println!("min {}, max {}", min, max);
                     return (min + max).into();
                 }
                 j += 1;
