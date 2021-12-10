@@ -154,9 +154,9 @@ fn parse_tests(
             }
         } else {
             //Sometimes we have to override which piece of output we get the input from
-            const INPUT_INDEX_OVERRIDE_DAYS: [Day; 2] = [ Day { year: 2020, day: 10 }, Day { year: 2020, day: 16 } ];
-            const INPUT_INDEX_OVERRIDE_PART: [Part; 2] = [ Part::Part1, Part::Part1 ];
-            const INPUT_INDEX_OVERRIDE_VALUES: [usize; 2] = [ 1, 1 ];
+            const INPUT_INDEX_OVERRIDE_DAYS: [Day; 3] = [ Day { year: 2020, day: 10 }, Day { year: 2020, day: 16 }, Day { year: 2021, day: 8 } ];
+            const INPUT_INDEX_OVERRIDE_PART: [Part; 3] = [ Part::Part1, Part::Part1, Part::Part1 ];
+            const INPUT_INDEX_OVERRIDE_VALUES: [usize; 3] = [ 1, 1, 2 ];
 
             let mut input_index = 0;
             for (i, candidate) in INPUT_INDEX_OVERRIDE_DAYS.iter().enumerate() {
