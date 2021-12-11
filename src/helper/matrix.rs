@@ -170,6 +170,34 @@ impl<T> Matrix<T> {
         }
     }
 
+    /// Returns an iter which gives references to the values for the cells surrounding
+    /// `row` and `col`
+    pub fn strict_neighbor_iter(&self, row: usize, col: usize) -> StrictNeighborIter<'_, T> {
+        StrictNeighborIter {
+            inner: StrictNeighborEnumIter {
+                mat: self,
+                row,
+                col,
+                index: 0,
+            },
+        }
+    }
+
+    /// Returns an iter which gives references to the values for the cells surrounding
+    /// `row` and `col`
+    pub fn strict_enum_neighbor_iter(
+        &self,
+        row: usize,
+        col: usize,
+    ) -> StrictNeighborEnumIter<'_, T> {
+        StrictNeighborEnumIter {
+            mat: self,
+            row,
+            col,
+            index: 0,
+        }
+    }
+
     /// Returns an iter which gives (row_index, column_index, value) for the cells surrounding
     /// `row` and `col8
     pub fn enumerated_neighbor_iter(&self, row: usize, col: usize) -> NeighborEnumIter<'_, T> {
@@ -191,6 +219,41 @@ impl<T> Matrix<T> {
             }
             println!();
         }
+    }
+
+    pub fn map<U, F>(&self, f: F) -> Matrix<U>
+    where
+        F: Fn(&T) -> U,
+    {
+        let data = self.data.iter().map(|v| f(v)).collect();
+        Matrix {
+            data,
+            cols: self.cols,
+        }
+    }
+
+    pub fn into_map<U, F>(self, f: F) -> Matrix<U>
+    where
+        F: Fn(T) -> U,
+    {
+        let data = self.data.into_iter().map(|v| f(v)).collect();
+        Matrix {
+            data,
+            cols: self.cols,
+        }
+    }
+}
+
+impl<T> Matrix<T>
+where
+    T: Clone,
+{
+    pub fn new_with_value(rows: usize, cols: usize, value: T) -> Matrix<T> {
+        let mut data = Vec::new();
+        for _ in 0..(rows * cols) {
+            data.push(value.clone());
+        }
+        Matrix { data, cols }
     }
 }
 
@@ -225,6 +288,17 @@ pub struct NeighborEnumIter<'a, T> {
     index: usize,
 }
 
+pub struct StrictNeighborIter<'a, T> {
+    inner: StrictNeighborEnumIter<'a, T>,
+}
+
+pub struct StrictNeighborEnumIter<'a, T> {
+    mat: &'a Matrix<T>,
+    row: usize,
+    col: usize,
+    index: usize,
+}
+
 impl<'a, T> Iterator for EnumIter<'a, T> {
     type Item = (usize, usize, &'a T);
 
@@ -243,7 +317,7 @@ impl<'a, T> Iterator for NeighborEnumIter<'a, T> {
     type Item = (usize, usize, &'a T);
 
     fn next(&mut self) -> Option<Self::Item> {
-        const OFFSETS: [(isize, isize); 8] = [
+        const OFFSETS: [(i8, i8); 8] = [
             (-1, 1),
             (0, 1),
             (1, 1),
@@ -259,8 +333,37 @@ impl<'a, T> Iterator for NeighborEnumIter<'a, T> {
         } else {
             let offset = OFFSETS[self.index];
             self.index += 1;
-            let row = self.row as isize + offset.0;
-            let col = self.col as isize + offset.1;
+            let row = self.row as isize + offset.0 as isize;
+            let col = self.col as isize + offset.1 as isize;
+
+            //Skip ahead if we are out of bonds
+            if row < 0 || row as usize >= self.mat.rows() {
+                return self.next();
+            }
+            if col < 0 || col as usize >= self.mat.cols() {
+                return self.next();
+            }
+
+            let row = row as usize;
+            let col = col as usize;
+            Some((row, col, self.mat.get(row, col)))
+        }
+    }
+}
+
+impl<'a, T> Iterator for StrictNeighborEnumIter<'a, T> {
+    type Item = (usize, usize, &'a T);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        const OFFSETS: [(i8, i8); 4] = [(0, 1), (-1, 0), (1, 0), (0, -1)];
+
+        if self.index == OFFSETS.len() {
+            None
+        } else {
+            let offset = OFFSETS[self.index];
+            self.index += 1;
+            let row = self.row as isize + offset.0 as isize;
+            let col = self.col as isize + offset.1 as isize;
 
             //Skip ahead if we are out of bonds
             if row < 0 || row as usize >= self.mat.rows() {
@@ -278,6 +381,17 @@ impl<'a, T> Iterator for NeighborEnumIter<'a, T> {
 }
 
 impl<'a, T> Iterator for NeighborIter<'a, T> {
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.inner.next() {
+            Some((_, _, t)) => Some(t),
+            None => None,
+        }
+    }
+}
+
+impl<'a, T> Iterator for StrictNeighborIter<'a, T> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<Self::Item> {
