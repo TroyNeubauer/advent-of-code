@@ -263,6 +263,7 @@ fn main() {
                 8 => Box::new(y2021::day8::S),
                 9 => Box::new(y2021::day9::S),
                 10 => Box::new(y2021::day10::S),
+                11 => Box::new(y2021::day11::S),
                 _ => panic!("Unknown day {}, for year {}", day, year),
             },
             _ => panic!("Unknown year {}", year),

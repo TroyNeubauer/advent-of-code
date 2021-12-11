@@ -47,6 +47,29 @@ impl Matrix<u8> {
         let cols = data.len() / rows;
         Ok(Self { data, cols })
     }
+
+    pub fn new_from_single_nums(input: &str) -> Result<Self, String> {
+        let mut rows = 0;
+        let data: Vec<_> = input
+            .lines()
+            .map(|line| {
+                rows += 1;
+                line.bytes().map(|c| c - b'0')
+            })
+            .flatten()
+            .collect();
+
+        if data.len() % rows != 0 {
+            return Err(format!(
+                "Non rectangular matrix. rows: {}, size: {}",
+                rows,
+                data.len()
+            ));
+        }
+
+        let cols = data.len() / rows;
+        Ok(Self { data, cols })
+    }
 }
 
 impl<T, E> Matrix<T>
@@ -89,6 +112,10 @@ impl<T> Matrix<T> {
         Self { data, cols }
     }
 
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+
     pub fn try_get(&self, row: usize, col: usize) -> Option<&T> {
         let rows = self.data.len() / self.cols;
         let cols = self.cols;
@@ -102,6 +129,22 @@ impl<T> Matrix<T> {
             // 3  Therefore index will never exceed `col + `cols` * `rows`, which is the len of `self.data`
             //Some(unsafe { self.data.get_unchecked(index) })
             self.data.get(index)
+        }
+    }
+
+    pub fn try_get_mut(&mut self, row: usize, col: usize) -> Option<&mut T> {
+        let rows = self.data.len() / self.cols;
+        let cols = self.cols;
+        if row >= rows || col >= cols {
+            None
+        } else {
+            let index = col + row * self.cols;
+            // # Safety
+            // 1. `row` is in range (0..rows)
+            // 2. `col` is in range (0..cols)
+            // 3  Therefore index will never exceed `col + `cols` * `rows`, which is the len of `self.data`
+            //Some(unsafe { self.data.get_unchecked(index) })
+            self.data.get_mut(index)
         }
     }
 
@@ -135,9 +178,40 @@ impl<T> Matrix<T> {
         }
     }
 
+    pub fn get_mut(&mut self, row: usize, col: usize) -> &mut T {
+        let rows = self.data.len() / self.cols;
+        let cols = self.cols;
+        match self.try_get_mut(row, col) {
+            Some(t) => t,
+            None => {
+                panic!(
+                    "Matrix index out of range! row {}, col {}, rows {}, cols {}",
+                    row, col, rows, cols
+                );
+            }
+        }
+    }
+
+    /// Returns a mutable pointer to the element at `row`, `col`
+    ///
+    /// # Safety
+    /// 1. The caller must guarantee that `row` in in range (0..self.rows())
+    /// 2. The caller must guarantee that `col` in in range (0..self.cols())
+    pub unsafe fn ptr_mut_unchecked(&mut self, row: usize, col: usize) -> *mut T {
+        let rows = self.data.len() / self.cols;
+        let cols = self.cols;
+        let index = col + row * self.cols;
+        unsafe { self.data.as_mut_ptr().add(index) }
+    }
+
     /// Returns a row major iterator over this matrix
     pub fn iter(&self) -> impl Iterator<Item = &T> {
         self.data.iter()
+    }
+
+    /// Returns a row major iterator over this matrix
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
+        self.data.iter_mut()
     }
 
     pub fn rows(&self) -> usize {
@@ -157,11 +231,33 @@ impl<T> Matrix<T> {
         }
     }
 
+    /// Returns an iter which gives (row_index, column_index, value) across the matrix
+    pub fn cells(&self) -> Cells {
+        Cells {
+            index: 0,
+            cols: self.cols,
+            max_index: self.data.len(),
+        }
+    }
+
     /// Returns an iter which gives references to the values for the cells surrounding
     /// `row` and `col`
     pub fn neighbor_iter(&self, row: usize, col: usize) -> NeighborIter<'_, T> {
         NeighborIter {
             inner: NeighborEnumIter {
+                mat: self,
+                row,
+                col,
+                index: 0,
+            },
+        }
+    }
+
+    /// Returns an iter which gives references to the values for the cells surrounding
+    /// `row` and `col`
+    pub fn neighbor_iter_mut(&mut self, row: usize, col: usize) -> NeighborIterMut<'_, T> {
+        NeighborIterMut {
+            inner: NeighborEnumIterMut {
                 mat: self,
                 row,
                 col,
@@ -271,6 +367,12 @@ where
     }
 }
 
+pub struct Cells {
+    index: usize,
+    cols: usize,
+    max_index: usize,
+}
+
 pub struct EnumIter<'a, T> {
     data: &'a [T],
     index: usize,
@@ -288,6 +390,17 @@ pub struct NeighborEnumIter<'a, T> {
     index: usize,
 }
 
+pub struct NeighborIterMut<'a, T> {
+    inner: NeighborEnumIterMut<'a, T>,
+}
+
+pub struct NeighborEnumIterMut<'a, T> {
+    mat: &'a mut Matrix<T>,
+    row: usize,
+    col: usize,
+    index: usize,
+}
+
 pub struct StrictNeighborIter<'a, T> {
     inner: StrictNeighborEnumIter<'a, T>,
 }
@@ -297,6 +410,20 @@ pub struct StrictNeighborEnumIter<'a, T> {
     row: usize,
     col: usize,
     index: usize,
+}
+
+impl Iterator for Cells {
+    type Item = (usize, usize);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index == self.max_index {
+            return None;
+        }
+        let col = self.index % self.cols;
+        let row = self.index / self.cols;
+        self.index += 1;
+        Some((row, col))
+    }
 }
 
 impl<'a, T> Iterator for EnumIter<'a, T> {
@@ -380,6 +507,49 @@ impl<'a, T> Iterator for StrictNeighborEnumIter<'a, T> {
     }
 }
 
+impl<'a, T> Iterator for NeighborEnumIterMut<'a, T> {
+    type Item = (usize, usize, &'a mut T);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        const OFFSETS: [(i8, i8); 8] = [
+            (-1, 1),
+            (0, 1),
+            (1, 1),
+            (-1, 0),
+            (1, 0),
+            (-1, -1),
+            (0, -1),
+            (1, -1),
+        ];
+
+        if self.index == OFFSETS.len() {
+            None
+        } else {
+            let offset = OFFSETS[self.index];
+            self.index += 1;
+            let row = self.row as isize + offset.0 as isize;
+            let col = self.col as isize + offset.1 as isize;
+
+            //Skip ahead if we are out of bonds
+            if row < 0 || row as usize >= self.mat.rows() {
+                return self.next();
+            }
+            if col < 0 || col as usize >= self.mat.cols() {
+                return self.next();
+            }
+
+            let row = row as usize;
+            let col = col as usize;
+            // Safety: row and col are in range by the bounds check above
+            let ptr = unsafe { self.mat.ptr_mut_unchecked(row, col) };
+            // Safety: mat is effectively split into mutiple sub slices for each call to next here
+            // that each live as long as thit iterator lives. Because we borrow mat exclusively,
+            // and do not touch the elements ourselves, creating this reference is safe here
+            Some((row, col, unsafe { &mut *ptr }))
+        }
+    }
+}
+
 impl<'a, T> Iterator for NeighborIter<'a, T> {
     type Item = &'a T;
 
@@ -393,6 +563,17 @@ impl<'a, T> Iterator for NeighborIter<'a, T> {
 
 impl<'a, T> Iterator for StrictNeighborIter<'a, T> {
     type Item = &'a T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.inner.next() {
+            Some((_, _, t)) => Some(t),
+            None => None,
+        }
+    }
+}
+
+impl<'a, T> Iterator for NeighborIterMut<'a, T> {
+    type Item = &'a mut T;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.inner.next() {
