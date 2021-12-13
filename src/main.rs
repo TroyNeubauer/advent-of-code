@@ -29,7 +29,13 @@ fn run(problems: &mut Problems, data: RunData) {
     // The days that are known to not have parsable tests
     // When we are running all tests then don't require tests on these days so that we don't hold up
     // running everything when tests are eventually not parsed from the prose
-    const MANUAL_TEST_DAYS: [Day; 1] = [Day { year: 2020, day: 5 }];
+    const MANUAL_TEST_DAYS: [Day; 2] = [
+        Day { year: 2020, day: 5 },
+        Day {
+            year: 2021,
+            day: 13,
+        },
+    ];
 
     let mut tests_required = true;
     if data.running_all && MANUAL_TEST_DAYS.contains(&Day { year, day }) {
@@ -113,8 +119,7 @@ fn run(problems: &mut Problems, data: RunData) {
                 println!("That's the right answer!");
             } else if text.contains("That's not the right answer.") {
                 println!("That's not the right answer.");
-            }
-            else {
+            } else {
                 info!("Server returned unknown response: {}", &text);
                 use rand::Rng;
                 let num: u32 = rand::thread_rng().gen();
@@ -264,6 +269,8 @@ fn main() {
                 9 => Box::new(y2021::day9::S),
                 10 => Box::new(y2021::day10::S),
                 11 => Box::new(y2021::day11::S),
+                12 => Box::new(y2021::day12::S),
+                13 => Box::new(y2021::day13::S),
                 _ => panic!("Unknown day {}, for year {}", day, year),
             },
             _ => panic!("Unknown year {}", year),
