@@ -198,10 +198,8 @@ impl<T> Matrix<T> {
     /// 1. The caller must guarantee that `row` in in range (0..self.rows())
     /// 2. The caller must guarantee that `col` in in range (0..self.cols())
     pub unsafe fn ptr_mut_unchecked(&mut self, row: usize, col: usize) -> *mut T {
-        let rows = self.data.len() / self.cols;
-        let cols = self.cols;
         let index = col + row * self.cols;
-        unsafe { self.data.as_mut_ptr().add(index) }
+        self.data.as_mut_ptr().add(index)
     }
 
     /// Returns a row major iterator over this matrix
@@ -321,7 +319,7 @@ impl<T> Matrix<T> {
     where
         F: Fn(&T) -> U,
     {
-        let data = self.data.iter().map(|v| f(v)).collect();
+        let data = self.data.iter().map(f).collect();
         Matrix {
             data,
             cols: self.cols,
@@ -332,7 +330,7 @@ impl<T> Matrix<T> {
     where
         F: Fn(T) -> U,
     {
-        let data = self.data.into_iter().map(|v| f(v)).collect();
+        let data = self.data.into_iter().map(f).collect();
         Matrix {
             data,
             cols: self.cols,
@@ -542,8 +540,8 @@ impl<'a, T> Iterator for NeighborEnumIterMut<'a, T> {
             let col = col as usize;
             // Safety: row and col are in range by the bounds check above
             let ptr = unsafe { self.mat.ptr_mut_unchecked(row, col) };
-            // Safety: mat is effectively split into mutiple sub slices for each call to next here
-            // that each live as long as thit iterator lives. Because we borrow mat exclusively,
+            // Safety: mat is effectively split into multiple sub slices for each call to next here
+            // that each live as long as this iterator lives. Because we borrow mat exclusively,
             // and do not touch the elements ourselves, creating this reference is safe here
             Some((row, col, unsafe { &mut *ptr }))
         }

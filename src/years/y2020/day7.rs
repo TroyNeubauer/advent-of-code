@@ -13,13 +13,12 @@ fn get_name<'a>(color: u32, names: &'a HashMap<&str, u32>) -> Option<&'a str> {
 fn contains_deep(
     color: u32,
     target_color: u32,
-    graph: &Vec<Vec<(u32, u32)>>,
+    graph: &[Vec<(u32, u32)>],
     backtrack: &mut HashMap<u32, u32>,
     names: &HashMap<&str, u32>,
     indent: u32,
     target_count: u32,
 ) -> bool {
-    let indent_str = (0..indent * 3).map(|_| " ").collect::<String>();
     if target_color == color {
         return false;
     }
@@ -33,16 +32,17 @@ fn contains_deep(
             target_color,
             graph,
             backtrack,
-            &names,
+            names,
             indent + 1,
             target_count,
         ) {
             return true;
         }
     }
-    return false;
+    false
 }
 
+#[allow(clippy::type_complexity)]
 fn parse(input: &str) -> (Vec<Vec<(u32, u32)>>, HashMap<&str, u32>) {
     let lines: Vec<&str> = input.lines().collect();
     let mut graph: Vec<Vec<(u32, u32)>> = vec![Vec::new(); lines.len()];
@@ -63,7 +63,7 @@ fn parse(input: &str) -> (Vec<Vec<(u32, u32)>>, HashMap<&str, u32>) {
                 continue;
             }
             let mut sub = 4;
-            if child_color_str.ends_with(".") {
+            if child_color_str.ends_with('.') {
                 sub = 5;
             }
             let number_pos = child_color_str.chars().position(|c| c == ' ').unwrap();
@@ -79,22 +79,22 @@ fn parse(input: &str) -> (Vec<Vec<(u32, u32)>>, HashMap<&str, u32>) {
 
 fn sum_deep(
     color: u32,
-    graph: &Vec<Vec<(u32, u32)>>,
+    graph: &[Vec<(u32, u32)>],
     names: &HashMap<&str, u32>,
     indent: u32,
 ) -> usize {
     let mut result: usize = 0;
     for (suspect, count) in &graph[color as usize] {
         result +=
-            sum_deep(*suspect, graph, &names, indent + 1) * (*count as usize) + *count as usize;
+            sum_deep(*suspect, graph, names, indent + 1) * (*count as usize) + *count as usize;
     }
-    return result;
+    result
 }
 
 impl crate::traits::AocDay for S {
     fn part1(&self, input: Input) -> Output {
         let mut counter = 0;
-        let (mut graph, names) = parse(input.as_str());
+        let (graph, names) = parse(input.as_str());
 
         let target_color = *names.get("shiny gold").unwrap() as u32;
         let mut backtrack: HashMap<u32, u32> = HashMap::new();
@@ -102,7 +102,7 @@ impl crate::traits::AocDay for S {
             if contains_deep(
                 connection as u32,
                 target_color as u32,
-                &mut graph,
+                &graph,
                 &mut backtrack,
                 &names,
                 0,
@@ -115,7 +115,7 @@ impl crate::traits::AocDay for S {
     }
 
     fn part2(&self, input: Input) -> Output {
-        let (mut graph, names) = parse(input.as_str());
+        let (graph, names) = parse(input.as_str());
 
         let target_color = *names.get("shiny gold").unwrap() as u32;
         let count = sum_deep(target_color, &graph, &names, 0);

@@ -23,7 +23,7 @@ impl crate::traits::AocDay for S {
     }
 
     fn part2(&self, input: Input) -> Output {
-        let mut fish: Vec<u32> = input.nums_comma_separated(); 
+        let fish: Vec<u32> = input.nums_comma_separated(); 
 
         let mut days_until_born = [0usize; 9];
         for f in fish {

@@ -18,7 +18,7 @@ enum Digit {
 }
 
 impl Digit {
-    fn to_segment(&self) -> SevenSegment {
+    fn to_segment(self) -> SevenSegment {
         match self {
             Digit::Zero => [1, 1, 1, 1, 1, 1, 0].into(),
             Digit::One => [0, 1, 1, 0, 0, 0, 0].into(),
@@ -53,7 +53,7 @@ impl Digit {
 struct SevenSegment(pub [u8; 7]);
 
 impl SevenSegment {
-    fn from_mapping(digit: &str, mapping: &Vec<char>) -> Self {
+    fn from_mapping(digit: &str, mapping: &[char]) -> Self {
         let mut result = [0; 7];
         for c in digit.chars() {
             let mut index = None;
@@ -76,7 +76,7 @@ impl SevenSegment {
         }))
     }
 
-    fn jumble(&self, indices: &Vec<u8>) -> Self {
+    fn jumble(&self, indices: &[u8]) -> Self {
         let mut result = [0; 7];
         for (i, mapping) in indices.iter().enumerate() {
             result[i] = self.0[*mapping as usize];
@@ -131,45 +131,8 @@ impl crate::traits::AocDay for S {
         count.into()
     }
 
-    fn part2(&self, input: Input) -> Output {
-        let mut count = 0;
-        for line in input.lines() {
-            let mut parts = line.split('|');
-            let input: Vec<_> = parts.next().unwrap().trim().split(' ').collect();
-            let digits: Vec<_> = parts.next().unwrap().trim().split(' ').collect();
-            println!("working on {}", line);
-            for possibility in ['a', 'b', 'c', 'd', 'e', 'f', 'g']
-                .into_iter()
-                .permutations(7)
-            {
-                //println!("Using {:?}", possibility);
-                let mut found_digit = vec![false; 10];
-                for digit in &digits {
-                    let segment = SevenSegment::from_mapping(digit, &possibility);
-                    for (i, d) in Digit::all().iter().enumerate() {
-                        if segment == d.to_segment() {
-                            found_digit[i] = true;
-                            //println!("Found {} with {:?}", i, segment);
-                        }
-                    }
-                }
-                let mut good_count = 0;
-                let mut found_all = true;
-                for f in found_digit {
-                    if f {
-                        good_count += 1;
-                    }
-                }
-                if good_count > 1 {
-                    println!("Bad: {}", good_count);
-                    if good_count == 0 {
-                        println!("FOUND ALL");
-                    }
-                }
-            }
-        }
-
-        count.into()
+    fn part2(&self, _input: Input) -> Output {
+        panic!("Too hard");
     }
 }
 

@@ -17,18 +17,14 @@ fn get_bad_number(lines: Vec<usize>, pre_length: usize, index: usize) -> Option<
             }
         }
     }
-    return Some(value);
-}
-
-fn get_range_sum(lines: &Vec<usize>, bad: usize) -> Option<usize> {
-    return None;
+    Some(value)
 }
 
 pub struct S;
 
 impl crate::traits::AocDay for S {
     fn part1(&self, input: Input) -> Output {
-        let num = if input.lines().collect::<Vec<_>>().len() > 50 {
+        let num = if input.lines().count() > 50 {
             25
         } else {
             5
@@ -57,6 +53,6 @@ impl crate::traits::AocDay for S {
                 j += 1;
             }
         }
-        panic!()
+        unreachable!()
     }
 }

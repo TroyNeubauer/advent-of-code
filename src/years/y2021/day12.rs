@@ -126,7 +126,7 @@ impl Graph {
             if visited_count >= 2 {
                 return 0;
             } else if visited_count == 1 {
-                //make sure we havnt visited another small cave twice already
+                //make sure we haven't visited another small cave twice already
                 let mut max: Option<(u8, u8)> = None;
                 for (index, count) in visited.iter() {
                     let n = &self.0[*index as usize];
@@ -137,7 +137,7 @@ impl Graph {
                         max = Some((*index, *count));
                     }
                 }
-                let (max_index, max_count) = max.unwrap();
+                let (_max_index, max_count) = max.unwrap();
 
                 if max_count >= 2 { 
                     return 0;

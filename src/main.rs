@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 mod helper;
 mod traits;
 mod util;
@@ -271,6 +272,10 @@ fn main() {
                 11 => Box::new(y2021::day11::S),
                 12 => Box::new(y2021::day12::S),
                 13 => Box::new(y2021::day13::S),
+                14 => Box::new(y2021::day14::S),
+                15 => Box::new(y2021::day15::S),
+                16 => Box::new(y2021::day16::S),
+                17 => Box::new(y2021::day17::S),
                 _ => panic!("Unknown day {}, for year {}", day, year),
             },
             _ => panic!("Unknown year {}", year),

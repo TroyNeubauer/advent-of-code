@@ -41,13 +41,10 @@ mod part2 {
     use super::*;
 
     pub fn execute(lines: Vec<&str>) -> Option<i32> {
-        let mut rip: i32 = 0;
-        let mut acc: i32 = 0;
-
         for change in 0..lines.len() {
             let mut visit_count: HashMap<i32, u32> = HashMap::new();
-            rip = 0;
-            acc = 0;
+            let mut rip: i32 = 0;
+            let mut acc: i32 = 0;
             let mut abort = false;
             while rip >= 0 && (rip as usize) < lines.len() {
                 if visit_count.get(&rip).is_some() {

@@ -66,7 +66,7 @@ fn parse_constraints(input_raw: &str) -> (&str, Vec<Constraint>) {
     let mut input = input_raw;
 
     //Parse constraints until we hit a double newline
-    while input.chars().next().unwrap() != '\n' {
+    while !input.starts_with('\n') {
         let out = parse_constraint(input).expect("Failed to parse input");
         result.push(out.1);
         input = out.0;
@@ -139,20 +139,19 @@ mod part2 {
         let (mut input, _comment2) = parse_comment(input).unwrap();
 
         let mut other: Vec<Ticket> = Vec::new();
-        while input.len() > 0 {
+        while !input.is_empty() {
             let (inner_input, ticket) = parse_ticket(input).unwrap();
             other.push(ticket);
             input = inner_input;
         }
 
-        let pre_len = other.len();
         let mut i = 0;
         while i < other.len() {
             let mut valid = false;
             for value in &other[i].fields {
                 valid = false;
                 for con in &con {
-                    if con.a.contains(&value) || con.b.contains(&value) {
+                    if con.a.contains(value) || con.b.contains(value) {
                         valid = true;
                         break;
                     }
@@ -216,7 +215,7 @@ impl crate::traits::AocDay for S {
                 let con = &data.constraints[field_id as usize];
                 for field_index in 0..ticket.fields.len() as u32 {
                     let value = &ticket.fields[field_index as usize];
-                    if !con.a.contains(&value) && !con.b.contains(&value) {
+                    if !con.a.contains(value) && !con.b.contains(value) {
                         possible[field_index as usize].remove(&field_id);
                     }
                 }
@@ -239,6 +238,7 @@ impl crate::traits::AocDay for S {
                 let field_poss = &possible[i].clone();
                 if field_poss.len() == 1 {
                     let known_value = &field_poss.iter().next().unwrap();
+                    #[allow(clippy::needless_range_loop)]
                     for j in 0..possible.len() {
                         if i == j {
                             continue;

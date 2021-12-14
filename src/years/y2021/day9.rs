@@ -11,7 +11,7 @@ fn explore(row: usize, col: usize, mat: &Matrix<u8>, visited: &mut Matrix<bool>)
         return 0;
     }
     let mut size = 1;
-    for (row, col, value) in mat.strict_enum_neighbor_iter(row, col) {
+    for (row, col, _value) in mat.strict_enum_neighbor_iter(row, col) {
         size += explore(row, col, mat, visited);
     }
     size
@@ -58,7 +58,7 @@ impl crate::traits::AocDay for S {
                 basins.push(size);
             }
         }
-        basins.sort();
+        basins.sort_unstable();
         basins.reverse();
         let mut a = 1;
         for val in basins[0..3].iter() {

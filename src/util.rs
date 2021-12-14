@@ -199,7 +199,7 @@ fn parse_tests(
     // input. For example 2020 day 1 part 2 has example input with markup that doesn't parse.
     // However we cant re-use all part 1 test input for part 2, because some challenges have a
     // different part 2 input on purpose
-    const USE_PART1_INPUT_OVERRIDE: [Day; 4] = [
+    const USE_PART1_INPUT_OVERRIDE: [Day; 5] = [
         Day { year: 2021, day: 1 },
         Day {
             year: 2020,
@@ -209,6 +209,10 @@ fn parse_tests(
         Day {
             year: 2021,
             day: 11,
+        },
+        Day {
+            year: 2021,
+            day: 14,
         },
     ];
     if USE_PART1_INPUT_OVERRIDE.contains(&day) {

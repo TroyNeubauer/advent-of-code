@@ -22,7 +22,6 @@ impl crate::traits::AocDay for S {
 
         let mut turn = 1;
         let mut map: HashMap<u32, u32> = HashMap::new();
-        let mut next_value = 0;
         let mut last = 0;
         for num in input.nums_comma_separated() {
             map.insert(num, turn);
@@ -30,7 +29,7 @@ impl crate::traits::AocDay for S {
             last = num;
         }
         while turn <= end_turn {
-            next_value = next(&map, last, turn);
+            let next_value = next(&map, last, turn);
             map.insert(last, turn - 1);
             last = next_value;
             turn += 1;
@@ -44,7 +43,6 @@ impl crate::traits::AocDay for S {
 
         let mut turn = 1;
         let mut map: HashMap<u32, u32> = HashMap::new();
-        let mut next_value = 0;
         let mut last = 0;
         for num in input.nums_comma_separated() {
             map.insert(num, turn);
@@ -52,7 +50,7 @@ impl crate::traits::AocDay for S {
             last = num;
         }
         while turn <= end_turn {
-            next_value = next(&map, last, turn);
+            let next_value = next(&map, last, turn);
             map.insert(last, turn - 1);
             last = next_value;
             turn += 1;

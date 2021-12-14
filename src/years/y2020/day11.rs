@@ -58,7 +58,7 @@ impl crate::traits::AocDay for S {
                     }
                     let around_count: usize = mat
                         .enumerated_neighbor_iter(row, col)
-                        .map(|(n_row, n_col, s)| {
+                        .map(|(n_row, n_col, _s)| {
                             let r_dir = row as isize - n_row as isize;
                             let c_dir = col as isize - n_col as isize;
                             let mut p_row = n_row as isize;
@@ -86,7 +86,6 @@ impl crate::traits::AocDay for S {
                         })
                         .sum();
 
-                    //println!("Counted {} people", around_count);
                     if *s == b'L' && around_count == 0 {
                         b'#'
                     } else if *s == b'#' && around_count >= 5 {

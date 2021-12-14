@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 
 use crate::traits::*;
-use std::io::Write;
 
 pub struct S;
 
@@ -59,7 +58,6 @@ fn parse(input: String) -> Result<Data, ()> {
     for line in folds.lines() {
         let a = line.split(' ').nth(2).unwrap();
         let mut parts = a.split('=');
-        println!("{}", a);
         let axis = parts.next().unwrap();
         let coord = parts.next().unwrap().parse::<u32>().unwrap();
         r_folds.push(Fold {
@@ -82,24 +80,27 @@ impl crate::traits::AocDay for S {
     }
 
     fn part2(&self, input: Input) -> Output {
-        let mut data = parse(input.into_inner()).unwrap();
+        let data = parse(input.into_inner()).unwrap();
         let mut points = data.points;
         for fold in data.folds {
             points = fold.execute(&points);
         }
-        let mut file = std::fs::File::create("out.txt").unwrap();
-        let mut line_width = points.iter().map(|(x, y)| *x).max().unwrap() + 1;
-        let mut lines = points.iter().map(|(x, y)| *y).max().unwrap() + 1;
+        let line_width = points.iter().map(|(x, _y)| *x).max().unwrap() + 1;
+        let lines = points.iter().map(|(_x, y)| *y).max().unwrap() + 1;
         for y in 0..lines {
             for x in 0..line_width {
                 if points.contains(&(x, y)) {
-                    write!(file, "#").unwrap();
+                    print!("#");
                 } else {
-                    write!(file, ".").unwrap();
+                    print!(" ");
                 }
             }
-            writeln!(file).unwrap();
+            println!();
         }
-        0.into()
+
+        let mut input = String::new();
+        println!("Input the characters that you see?");
+        std::io::stdin().read_line(&mut input).unwrap();
+        input.into()
     }
 }
