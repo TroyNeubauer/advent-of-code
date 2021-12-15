@@ -339,6 +339,49 @@ impl<T> Matrix<T> {
 }
 
 impl<T> Matrix<T>
+    where usize: From<T>,
+          T: Clone
+{
+
+    pub fn pathfind(&self, start: (usize, usize), end: (usize, usize)) -> Option<(Vec<(usize, usize)>, usize)> {
+
+        let successors = |pos: &(usize, usize)| -> Vec<((usize, usize), usize)> {
+            let x = pos.0;
+            let y = pos.1;
+            let mut result = Vec::new();
+
+            if x < end.0 {
+                result.push(((x + 1, y), usize::from(self.get(x + 1, y).clone())));
+            }
+
+            if x > 0 {
+                result.push(((x - 1, y), usize::from(self.get(x - 1, y).clone())));
+            }
+
+            if y < end.1 {
+                result.push(((x, y + 1), usize::from(self.get(x, y + 1).clone())));
+            }
+
+            if y > 0 {
+                result.push(((x, y - 1), usize::from(self.get(x, y - 1).clone())));
+            }
+
+            result
+        };
+
+        pathfinding::prelude::astar(
+            &start,
+            |p| successors(p),
+            |p| {
+                isize::abs(p.0 as isize - end.0 as isize) as usize + 
+                isize::abs(p.1 as isize - end.1 as isize) as usize
+            } / 3,
+            |p| p.0 == end.0 && p.1 == end.1,
+        )
+    }
+}
+
+impl<T> Matrix<T>
 where
     T: Clone,
 {
