@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 #[derive(Clone, Eq, PartialEq, Debug)]
-pub struct Matrix<T> {
+pub struct Matrix3D<T> {
     /// Stored in row major ordering
     data: Vec<T>,
     x_len: usize,
@@ -9,7 +9,7 @@ pub struct Matrix<T> {
     z_len: usize,
 }
 
-impl<T, E> Matrix<T>
+impl<T, E> Matrix3D<T>
 where
     T: FromStr,
     T: FromStr<Err = E>,
@@ -30,7 +30,7 @@ where
     }
 }
 
-impl Matrix<u8> {
+impl Matrix3D<u8> {
     /// Creates a new NxMx1 3d matrix from a 2d square of bytes
     pub fn new_from_chars(input: &str) -> Result<Self, String> {
         let mut rows = 0;
@@ -91,7 +91,7 @@ impl Matrix<u8> {
     }
 }
 
-impl<T> Matrix<T> {
+impl<T> Matrix3D<T> {
     pub fn new_from_iterator(
         x_len: usize,
         y_len: usize,
@@ -200,9 +200,8 @@ impl<T> Matrix<T> {
         // # Safety
         // The caller has guaranteed that x, and y, and z are in range so `self.index()` will never
         // return None
-        let index = self
-            .index(x, y, z)
-            .unwrap_or(|| unsafe { std::hint::unreachable_unchecked!() });
+        let index = self.index(x, y, z);
+        let index = index.unwrap_unchecked();
         self.data.as_mut_ptr().add(index)
     }
 
@@ -229,94 +228,110 @@ impl<T> Matrix<T> {
     }
 
     /// Returns an iter which gives (row_index, column_index, value) across the matrix
-    pub fn enumerated_iter(&self) -> EnumIter<'_, T> {
-        EnumIter {
-            data: self.data.as_slice(),
-            index: 0,
-            col_count: self.cols,
-        }
-    }
-
-    /// Returns an iter which gives (row_index, column_index, value) across the matrix
-    pub fn cells(&self) -> Cells {
-        Cells {
-            index: 0,
-            cols: self.cols,
-            max_index: self.data.len(),
-        }
-    }
-
-    /// Returns an iter which gives references to the values for the cells surrounding
-    /// `row` and `col`
-    pub fn neighbor_iter(&self, row: usize, col: usize) -> NeighborIter<'_, T> {
-        NeighborIter {
-            inner: NeighborEnumIter {
-                mat: self,
-                row,
-                col,
-                index: 0,
-            },
-        }
-    }
-
-    /// Returns an iter which gives references to the values for the cells surrounding
-    /// `row` and `col`
-    pub fn neighbor_iter_mut(&mut self, row: usize, col: usize) -> NeighborIterMut<'_, T> {
-        NeighborIterMut {
-            inner: NeighborEnumIterMut {
-                mat: self,
-                row,
-                col,
-                index: 0,
-            },
-        }
-    }
-
-    /// Returns an iter which gives references to the values for the cells surrounding
-    /// `row` and `col`
-    pub fn strict_neighbor_iter(&self, row: usize, col: usize) -> StrictNeighborIter<'_, T> {
-        StrictNeighborIter {
-            inner: StrictNeighborEnumIter {
-                mat: self,
-                row,
-                col,
-                index: 0,
-            },
-        }
-    }
-
-    /// Returns an iter which gives references to the values for the cells surrounding
-    /// `row` and `col`
-    pub fn strict_enum_neighbor_iter(
-        &self,
-        row: usize,
-        col: usize,
-    ) -> StrictNeighborEnumIter<'_, T> {
-        StrictNeighborEnumIter {
+    pub fn enumerated_iter(&self) -> SharedIterator<'_, T> {
+        SharedIterator {
             mat: self,
-            row,
-            col,
-            index: 0,
+            inner: CoordIterator {
+                mode: IterationMode::All,
+                x_len: self.x_len,
+                y_len: self.y_len,
+                z_len: self.z_len,
+                word: 0,
+            },
+        }
+    }
+
+    /// Returns an iter which gives references to the values for the cells surrounding
+    /// `row` and `col`
+    pub fn neighbor_iter(&self, x: usize, y: usize, z: usize) -> SharedIterator<'_, T> {
+        SharedIterator {
+            inner: CoordIterator {
+                mode: IterationMode::StrictNeighbors { x, y, z },
+                x_len: 0,
+                y_len: 0,
+                z_len: 0,
+                word: 0,
+            },
+            mat: self,
+        }
+    }
+
+    /// Returns an iter which gives references to the values for the cells surrounding
+    /// `row` and `col`
+    pub fn neighbor_iter_mut(&mut self, x: usize, y: usize, z: usize) -> ExclusiveIterator<'_, T> {
+        ExclusiveIterator {
+            inner: CoordIterator {
+                mode: IterationMode::StrictNeighbors { x, y, z },
+                x_len: 0,
+                y_len: 0,
+                z_len: 0,
+                word: 0,
+            },
+            mat: self,
+        }
+    }
+
+    /// Returns an iter which gives references to the values for the cells surrounding
+    /// `row` and `col`
+    pub fn strict_neighbor_iter(&self, x: usize, y: usize, z: usize) -> SharedIterator<'_, T> {
+        SharedIterator {
+            inner: CoordIterator {
+                mode: IterationMode::StrictNeighbors { x, y, z },
+                x_len: 0,
+                y_len: 0,
+                z_len: 0,
+                word: 0,
+            },
+            mat: self,
+        }
+    }
+
+    /// Returns an iter which gives references to the values for the cells surrounding
+    /// `row` and `col`
+    pub fn strict_enumerated_neighbor_iter(
+        &self,
+        x: usize,
+        y: usize,
+        z: usize,
+    ) -> SharedEnumeratedIterator<'_, T> {
+        SharedEnumeratedIterator {
+            inner: CoordIterator {
+                mode: IterationMode::StrictNeighbors { x, y, z },
+                x_len: 0,
+                y_len: 0,
+                z_len: 0,
+                word: 0,
+            },
+            mat: self,
         }
     }
 
     /// Returns an iter which gives (row_index, column_index, value) for the cells surrounding
     /// `row` and `col8
-    pub fn enumerated_neighbor_iter(&self, row: usize, col: usize) -> NeighborEnumIter<'_, T> {
-        NeighborEnumIter {
+    pub fn enumerated_neighbor_iter(
+        &self,
+        x: usize,
+        y: usize,
+        z: usize,
+    ) -> SharedEnumeratedIterator<'_, T> {
+        SharedEnumeratedIterator {
+            inner: CoordIterator {
+                mode: IterationMode::Neighbors { x, y, z },
+                x_len: 0,
+                y_len: 0,
+                z_len: 0,
+                word: 0,
+            },
             mat: self,
-            row,
-            col,
-            index: 0,
         }
     }
 
-    pub fn map<U, F>(&self, f: F) -> Matrix<U>
+    pub fn map<U, F>(&self, f: F) -> Matrix3D<U>
     where
         F: Fn(&T) -> U,
     {
         let data = self.data.iter().map(f).collect();
-        Matrix {
+        Matrix3D {
             data,
             x_len: self.x_len,
             y_len: self.y_len,
@@ -324,12 +339,12 @@ impl<T> Matrix<T> {
         }
     }
 
-    pub fn into_map<U, F>(self, f: F) -> Matrix<U>
+    pub fn into_map<U, F>(self, f: F) -> Matrix3D<U>
     where
         F: Fn(T) -> U,
     {
         let data = self.data.into_iter().map(f).collect();
-        Matrix {
+        Matrix3D {
             data,
             x_len: self.x_len,
             y_len: self.y_len,
@@ -338,16 +353,16 @@ impl<T> Matrix<T> {
     }
 }
 
-impl<T> Matrix<T>
+impl<T> Matrix3D<T>
 where
     T: Clone,
 {
-    pub fn new_with_value(x_len: usize, y_len: usize, z_len: usize, value: T) -> Matrix<T> {
+    pub fn new_with_value(x_len: usize, y_len: usize, z_len: usize, value: T) -> Matrix3D<T> {
         let mut data = Vec::new();
         for _ in 0..(x_len * y_len * z_len) {
             data.push(value.clone());
         }
-        Matrix {
+        Matrix3D {
             data,
             x_len,
             y_len,
@@ -356,7 +371,7 @@ where
     }
 }
 
-impl<T> Matrix<T>
+impl<T> Matrix3D<T>
 where
     T: std::fmt::Display,
 {
@@ -368,6 +383,50 @@ where
             }
             println!();
         }
+    }
+}
+
+pub struct SharedIterator<'a, T> {
+    inner: CoordIterator,
+    mat: &'a Matrix3D<T>,
+}
+
+impl<'a, T> Iterator for SharedIterator<'a, T> {
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let (x, y, z) = self.inner.next()?;
+        Some(self.mat.get(x, y, z))
+    }
+}
+
+pub struct ExclusiveIterator<'a, T> {
+    inner: CoordIterator,
+    mat: &'a mut Matrix3D<T>,
+}
+
+impl<'a, T> Iterator for ExclusiveIterator<'a, T> {
+    type Item = &'a mut T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let (x, y, z) = self.inner.next()?;
+        debug_assert!(self.mat.index(x, y, z).is_some());
+        let ptr = unsafe { self.mat.ptr_mut_unchecked(x, y, z) };
+        Some(unsafe { &mut *ptr })
+    }
+}
+
+pub struct SharedEnumeratedIterator<'a, T> {
+    inner: CoordIterator,
+    mat: &'a Matrix3D<T>,
+}
+
+impl<'a, T> Iterator for SharedEnumeratedIterator<'a, T> {
+    type Item = (usize, usize, usize, &'a T);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let (x, y, z) = self.inner.next()?;
+        Some((x, y, z, self.mat.get(x, y, z)))
     }
 }
 

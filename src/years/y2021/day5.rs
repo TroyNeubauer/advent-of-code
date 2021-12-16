@@ -1,3 +1,5 @@
+use itertools::Itertools;
+
 use crate::traits::*;
 
 pub struct S;
@@ -6,22 +8,15 @@ fn parse(lines: Vec<&str>) -> Vec<((i32, i32), (i32, i32))> {
     lines
         .iter()
         .map(|line| {
-            let mut s = line.split(" -> ");
-            let a = s.next().unwrap();
-            let b = s.next().unwrap();
-
-            let mut a_s = a.split(",");
-            let mut b_s = b.split(",");
-            (
-                (
-                    a_s.next().unwrap().parse().unwrap(),
-                    a_s.next().unwrap().parse().unwrap(),
-                ),
-                (
-                    b_s.next().unwrap().parse().unwrap(),
-                    b_s.next().unwrap().parse().unwrap(),
-                ),
-            )
+            line.split(" -> ")
+                .map(|s| {
+                    s.split(",")
+                        .map(|n| n.parse().unwrap())
+                        .collect_tuple()
+                        .unwrap()
+                })
+                .collect_tuple()
+                .unwrap()
         })
         .collect()
 }
