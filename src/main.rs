@@ -4,6 +4,9 @@ mod traits;
 mod util;
 mod years;
 
+#[macro_use]
+extern crate combine;
+
 use util::{Day, Problems};
 
 use traits::AocDay;
@@ -276,6 +279,14 @@ fn main() {
                 15 => Box::new(y2021::day15::S),
                 16 => Box::new(y2021::day16::S),
                 17 => Box::new(y2021::day17::S),
+                18 => Box::new(y2021::day17::S),
+                19 => Box::new(y2021::day17::S),
+                20 => Box::new(y2021::day20::S),
+                21 => Box::new(y2021::day21::S),
+                22 => Box::new(y2021::day22::S),
+                23 => Box::new(y2021::day23::S),
+                24 => Box::new(y2021::day24::S),
+                25 => Box::new(y2021::day25::S),
                 _ => panic!("Unknown day {}, for year {}", day, year),
             },
             _ => panic!("Unknown year {}", year),

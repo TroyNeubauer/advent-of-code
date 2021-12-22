@@ -11,7 +11,6 @@ fn simulate(
     target_x: &RangeInclusive<i32>,
     target_y: &RangeInclusive<i32>,
 ) -> Option<i32> {
-    println!("Trying {} {}", dx, dy);
     let mut x = 0;
     let mut y = 0;
     let mut max_y = y;
@@ -23,8 +22,6 @@ fn simulate(
         }
         dx -= dx.signum();
         dy -= 1;
-        dbg!(x, y, dx, dy);
-        println!();
         match (target_x.contains(&x), target_y.contains(&y)) {
             (true, true) => return Some(max_y),
             (false, _) if dx == 0 => return None,
@@ -53,8 +50,6 @@ impl AocDay for S {
         let (x1, x2, y1, y2) = parse(input).unwrap();
         let x_target = x1..=x2;
         let y_target = y1..=y2;
-
-        println!("MAX: {}", simulate(6, 9, &x_target, &y_target).unwrap());
 
         let x_range = i32::max(x1.abs(), x2.abs());
         let y_range = i32::max(y1.abs(), y2.abs());

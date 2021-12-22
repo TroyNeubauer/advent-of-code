@@ -9,6 +9,7 @@ dependencies = [
  "bitstream-io",
  "chrono",
  "clap",
+ "combine",
  "data-encoding",
  "env_logger",
  "itertools",
@@ -161,6 +162,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "combine"
+version = "4.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2b2f5d0ee456f3928812dfc8c6d9a1d592b98678f6d56db9b0cd2b7bc6c8db5"
+dependencies = [
+ "bytes",
+ "memchr",
 ]
 
 [[package]]
