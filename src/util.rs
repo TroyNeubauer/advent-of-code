@@ -178,7 +178,13 @@ fn parse_tests(
 
             let input = inputs.remove(input_index);
             let output = outputs.remove(outputs.len() - 1);
-            assert!(input.index() < output.index());
+            if input.index() >= output.index() && false {
+                panic!(
+                    "Test input after test output! {} >= {}",
+                    input.index(),
+                    output.index()
+                );
+            }
 
             Some(Test {
                 input: input.text(),
