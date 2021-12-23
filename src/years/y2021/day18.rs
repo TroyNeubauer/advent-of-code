@@ -1,89 +1,84 @@
-use crate::traits::*;
 
-use combine::{
-    error::{Commit, ParseError},
-    parser::{
-        char::{char, digit, spaces, string},
-        choice::{choice, optional},
-        repeat::{many, many1, sep_by},
-        sequence::between,
-        token::{any, satisfy, satisfy_map},
-    },
-    stream::{
-        buffered,
-        position::{self, SourcePosition},
-        IteratorStream,
-    },
-    EasyParser, Parser, Stream, StreamOnce,
-};
+use crate::traits::*;
 
 pub struct S;
 
-#[derive(Debug, Clone)]
-enum Number {
-    Nested(Box<Number>, Box<Number>),
-    Num(usize),
+type Numbers = Vec<(u8, u8)>;
+
+//Format (depth, value)
+fn parse(input: Input) -> Vec<Numbers> {
+    input
+        .lines_bytes()
+        .map(|line| {
+            line.iter()
+                .fold((0, Vec::new()), |(mut d, mut vec), c| {
+                    match c {
+                        b'[' => d += 1,
+                        b']' => d -= 1,
+                        b'0'..=b'9' => vec.push((d, c - b'0')),
+                        b',' => {}
+                        _ => unreachable!("{}", *c as char),
+                    }
+                    (d, vec)
+                })
+                .1
+        })
+        .collect()
 }
 
-#[inline]
-fn parse_snailfish_number<Input>() -> impl Parser<Input, Output = Number>
-where
-    Input: Stream<Token = char>,
-    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
-{
-    parse_snailfish_number_()
+fn add(mut a: Numbers, b: Numbers) -> Numbers {
+    a.extend(b);
+    a.iter_mut().for_each(|(d, _)| *d += 1);
+    a
 }
 
-combine::parser! {
-    #[inline]
-    fn parse_snailfish_number_[Input]()(Input) -> Number
-        where [ Input: Stream<Token = char> ]
-    {
-        let array = between(
-            char('['),
-            char(']'),
-            sep_by(parse_snailfish_number(), char(',')),
-        ).map(Number::Rec);
-
-        let number = many1(digit())
-            .map(|s: String| {
-                let mut n = 0;
-                for c in s.chars() {
-                    n = n * 10 + (c as usize - '0' as usize);
-                }
-                Number::Pair(n)
-            })
-            .expected("integer");
-
-        choice((
-            array,
-            number,
-        ))
+fn reduce(input: &mut Numbers, start: usize) {
+    for i in start..input.len() - 1 {
+        if input[i].0 == 5 {
+            let (left, right) = (input[i].1, input[i + 1].1);
+            input[i] = (4, 0);
+            input.remove(i + 1);
+            let _ = input.get_mut(i.overflowing_sub(1).0).map(|n| n.1 += left);
+            let _ = input.get_mut(i + 1).map(|n| n.1 += right);
+            return reduce(input, i);
+        }
+    }
+    for i in 0..input.len() {
+        let (d, n) = input[i];
+        if n >= 10 {
+            input[i] = (d + 1, n / 2);
+            input.insert(i + 1, (d + 1, (n + 1) / 2));
+            return reduce(input, i);
+        }
     }
 }
 
-fn parse(input: Input) -> Vec<Number> {
-    let mut lines = Vec::new();
-    let mut parser = parse_snailfish_number();
-    for line in input.lines() {
-        let (number, _rest) = match parser.easy_parse(line) {
-            Ok(n) => n,
-            Err(err) => {
-                println!("{:?}", err.position);
-                panic!("{}", err);
-            }
-        };
-        lines.push(number);
+fn mag(i: &mut usize, depth: u8, sf: &Numbers) -> u16 {
+    3 * if sf[*i].0 == depth {
+        *i += 1;
+        sf[*i - 1].1 as u16
+    } else {
+        mag(i, depth + 1, sf)
+    } + 2 * if sf[*i].0 == depth {
+        *i += 1;
+        sf[*i - 1].1 as u16
+    } else {
+        mag(i, depth + 1, sf)
     }
-
-    lines
 }
 
 impl AocDay for S {
     fn part1(&self, input: Input) -> Output {
         let input = parse(input);
-        println!("{:?}", input);
-        todo!()
+        let mut it = input.into_iter();
+        let mut a = it.next().unwrap();
+        for b in it {
+            a = add(a, b);
+            reduce(&mut a, 0)
+            
+        }
+        println!("got {:?}", a);
+        mag(&mut 0, 1, &a).into()
     }
 
     fn part2(&self, input: Input) -> Output {

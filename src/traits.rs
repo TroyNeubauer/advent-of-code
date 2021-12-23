@@ -1,4 +1,4 @@
-use std::str::{FromStr, Lines};
+use std::{str::{FromStr, Lines}, slice::Split};
 
 pub use crate::helper::*;
 pub use std::collections::HashMap;
@@ -47,6 +47,10 @@ impl Input {
 
     pub fn lines(&self) -> Lines {
         self.0.lines()
+    }
+
+    pub fn lines_bytes<'a>(&'a self) -> Box<dyn Iterator<Item = &'a[u8]> + 'a> {
+        Box::new(self.0.as_bytes().split(|&b| b == b'\n'))
     }
 
     pub fn as_str(&self) -> &str {

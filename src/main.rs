@@ -62,9 +62,15 @@ fn run(problems: &mut Problems, data: RunData) {
             Some(test) => {
                 let input = traits::Input::new(test.input.clone());
                 let output = if part1 {
-                    data.implementation.part1(input)
+                    debug!("Running part 1 test");
+                    let r = data.implementation.part1(input);
+                    debug!("Part 1 test finished");
+                    r
                 } else {
-                    data.implementation.part2(input)
+                    debug!("Running part 2 test");
+                    let r = data.implementation.part2(input);
+                    debug!("Part 2 test finished");
+                    r
                 };
 
                 let expected = test.expected_output.trim();
@@ -92,8 +98,10 @@ fn run(problems: &mut Problems, data: RunData) {
 
         let input = traits::Input::new(day_data.input.clone());
         let output = if part1 {
+            debug!("Running part 1 implementation");
             data.implementation.part1(input)
         } else {
+            debug!("Running part 2 implementation");
             data.implementation.part2(input)
         };
         let answer = output.into_inner();
@@ -279,8 +287,8 @@ fn main() {
                 15 => Box::new(y2021::day15::S),
                 16 => Box::new(y2021::day16::S),
                 17 => Box::new(y2021::day17::S),
-                18 => Box::new(y2021::day17::S),
-                19 => Box::new(y2021::day17::S),
+                18 => Box::new(y2021::day18::S),
+                19 => Box::new(y2021::day19::S),
                 20 => Box::new(y2021::day20::S),
                 21 => Box::new(y2021::day21::S),
                 22 => Box::new(y2021::day22::S),
