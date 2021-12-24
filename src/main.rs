@@ -41,8 +41,15 @@ fn run(problems: &mut Problems, data: RunData) {
         },
     ];
 
+    // Days that have no tests at all
+    const NO_TEST_DAYS: [Day; 1] = [Day {
+        year: 2021,
+        day: 24,
+    }];
+
     let mut tests_required = true;
-    if data.running_all && MANUAL_TEST_DAYS.contains(&Day { year, day }) {
+    let day_day = &Day { year, day };
+    if data.running_all && MANUAL_TEST_DAYS.contains(day_day) || NO_TEST_DAYS.contains(day_day) {
         tests_required = false;
     }
 
