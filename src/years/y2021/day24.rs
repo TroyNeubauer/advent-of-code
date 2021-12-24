@@ -1,3 +1,5 @@
+use std::sync::atomic::{Ordering, AtomicIsize};
+
 use crate::traits::*;
 
 pub struct S;
@@ -18,9 +20,10 @@ enum Ins {
     Eql(Operand, Operand),
 }
 
+#[derive(Debug, Clone)]
 struct Program(Vec<Ins>);
 
-struct Computer([usize; 4]);
+struct Computer([isize; 4]);
 
 impl Operand {
     fn parse<'a>(items: &mut impl Iterator<Item = &'a str>) -> Self {
@@ -63,7 +66,7 @@ impl Computer {
         Self([0; 4])
     }
 
-    fn is_valid(&mut self, program: &Program, serial: usize) -> bool {
+    fn is_valid(&mut self, program: &Program, serial: isize) -> bool {
         let base10 = serial.to_string();
         if base10.contains('0') {
             return false;
@@ -72,7 +75,7 @@ impl Computer {
         for ins in &program.0 {
             match ins {
                 Ins::Inp(op) => {
-                    self.write(op, (base10.as_bytes()[s_index] as usize) - (b'0' as usize));
+                    self.write(op, (base10.as_bytes()[s_index] as isize) - (b'0' as isize));
                     s_index += 1;
                 }
                 Ins::Add(op_a, op_b) => {
@@ -104,36 +107,68 @@ impl Computer {
             }
         }
 
-        false
+        self.0[3] == 0
     }
 
-    fn write(&mut self, reg: &Operand, value: usize) {
+    fn write(&mut self, reg: &Operand, value: isize) {
         match reg {
             Operand::Register(reg) => self.0[*reg as usize] = value,
             bad => panic!("Cannot write to non register {:?}", bad),
         }
     }
 
-    fn read(&mut self, reg: &Operand) -> usize {
+    fn read(&mut self, reg: &Operand) -> isize {
         match reg {
             Operand::Register(reg) => self.0[*reg as usize],
-            Operand::Literal(lit) => *lit as usize,
+            Operand::Literal(lit) => *lit as isize,
         }
     }
 }
 
+static SERIAL: AtomicIsize = AtomicIsize::new(100_000_000_000_000);
+
 impl AocDay for S {
     fn part1(&self, input: Input) -> Output {
         let program = Program::parse(input);
-        let mut computer = Computer::new();
-        let mut serial = 99_999_999_999_999;
-        loop {
-            if computer.is_valid(&program, serial) {
-                break serial.into();
-            }
-            serial -= 1;
-            println!("Trying {}", serial);
+        const NUM_THREADS: isize = 12;
+        const STRIDE_LENGTH: isize = 1_000_000;
+        let threads: Vec<_> = (0..NUM_THREADS)
+            .map(|thread_id| {
+                let program = program.clone();
+                std::thread::spawn(move || {
+                    let mut searched: isize = 0;
+                    let mut computer = Computer::new();
+                    loop {
+                        let starting_serial = SERIAL.fetch_sub(STRIDE_LENGTH, Ordering::SeqCst);
+                        if starting_serial < 1_000_000_000_000 {
+                            println!("thread {} searched {}", thread_id, searched);
+                            break;
+                        }
+                        for i in 0..STRIDE_LENGTH {
+                            let serial = starting_serial - i;
+                            if computer.is_valid(&program, serial) {
+                                println!("Found valid thing: {}", serial);
+                                break;
+                            }
+                            searched += 1;
+                        }
+                    }
+                })
+            })
+            .collect();
+
+        let mut last = SERIAL.load(Ordering::Relaxed);
+        while SERIAL.load(Ordering::Relaxed) >= 1_000_000_000_000 {
+            let now = SERIAL.load(Ordering::Relaxed);
+            println!("checked {} - {}", last - now, now);
+            last = now;
+            std::thread::sleep_ms(60000);
+
         }
+        for thread in threads {
+            thread.join().unwrap();
+        }
+        panic!("Check console for output");
     }
 
     fn part2(&self, input: Input) -> Output {
