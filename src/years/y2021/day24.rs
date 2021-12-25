@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 use std::io::Write;
 use std::sync::atomic::{AtomicIsize, Ordering};
+use std::time::Instant;
 
 use crate::traits::*;
 
@@ -483,8 +484,9 @@ impl AocDay for S {
                             sub(&mut serial, serial_index);
                             if func(serial.as_ptr()) {
                                 println!(
-                                    "Found valid thing: {:?}",
-                                    serial.map(|c| (c + b'0') as char)
+                                    "FOUND IT: {:?} - {:?}",
+                                    serial.map(|c| (c + b'0') as char),
+                                    serial,
                                 );
                                 break;
                             }
@@ -496,11 +498,23 @@ impl AocDay for S {
             .collect();
 
         let mut last = SERIAL.load(Ordering::Relaxed);
-        while SERIAL.load(Ordering::Relaxed) >= 1_000_000_000_000 {
+        let mut time = Instant::now();
+        loop {
             let now = SERIAL.load(Ordering::Relaxed);
-            println!("checked {} - {}", last - now, now);
+            let delta = time.elapsed();
+            let num_completed = last - now;
+            time = Instant::now();
             last = now;
-            std::thread::sleep_ms(1000 * 60);
+            println!(
+                "checked {} - {} {} nanos per op",
+                num_completed,
+                now,
+                delta.as_secs_f64() * 1_000_000_000.0 / num_completed as f64 * NUM_THREADS as f64
+            );
+            if now < 1_000_000_000_000 {
+                break;
+            }
+            std::thread::sleep_ms(1000 * 60 * 4);
         }
         for thread in threads {
             thread.join().unwrap();
