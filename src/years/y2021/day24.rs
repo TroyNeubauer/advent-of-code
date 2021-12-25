@@ -1,4 +1,6 @@
 use std::collections::VecDeque;
+use std::io::Write;
+use std::sync::atomic::{AtomicIsize, Ordering};
 
 use crate::traits::*;
 
@@ -284,6 +286,57 @@ impl Program {
         (side_effects.reduce(), possible_inputs)
         //(side_effects, possible_inputs)
     }
+
+    fn write_to_rust_file(&self, name: &str, input_count: usize) -> std::io::Result<()> {
+        let mut file = std::fs::File::create(name)?;
+        writeln!(
+            file,
+            "{}",
+            r#"
+#include <stdint.h>
+#include <stddef.h>
+#include <stdbool.h>
+
+bool y2021_d24_execute(const uint8_t* input) {
+     size_t w = 0;
+     size_t x = 0;
+     size_t y = 0;
+     size_t z = 0;
+"#
+        )?;
+
+        let mut input_index = 0;
+        for ins in &self.0 {
+            match ins {
+                Ins::Inp(reg) => {
+                    writeln!(file, "    {} = (size_t) input[{}];", reg, input_index)?;
+                    input_index += 1;
+                }
+                Ins::Add(a, b) => writeln!(file, "    {} = {} + {};", a, a, b)?,
+                Ins::Mul(a, b) => writeln!(file, "    {} = {} * {};", a, a, b)?,
+                Ins::Div(a, b) => writeln!(file, "    {} = {} / {};", a, a, b)?,
+                Ins::Mod(a, b) => writeln!(file, "    {} = {} % {};", a, a, b)?,
+                Ins::Eql(a, b) => writeln!(
+                    file,
+                    "    if ({} == {}) {{ {} = 1; }} else {{ {} = 0; }};",
+                    a, b, a, a
+                )?,
+            }
+        }
+
+        assert_eq!(input_count, input_index);
+
+        writeln!(
+            file,
+            "{}",
+            r#"
+    return z == 0;
+}
+"#
+        )?;
+
+        Ok(())
+    }
 }
 
 impl SideEffectTree {
@@ -367,11 +420,92 @@ impl Computer {
     }
 }
 
+static SERIAL: AtomicIsize = AtomicIsize::new(99_999_999_999_999);
+
 impl AocDay for S {
     fn part1(&self, input: Input) -> Output {
         let program = Program::parse(input);
-        let (side_effects, possible_inputs) = program.build_side_effects(Some(100));
-        println!("{}", side_effects.print_tree());
+        //let (side_effects, possible_inputs) = program.build_side_effects(Some(100));
+        //println!("{}", side_effects.print_tree());
+        let input_count = program
+            .0
+            .iter()
+            .filter_map(|i| if let Ins::Inp(_) = i { Some(()) } else { None })
+            .count();
+
+        program.write_to_rust_file("out.c", input_count).unwrap();
+
+        let gcc = std::process::Command::new("gcc")
+            .arg("-shared")
+            .arg("-o")
+            .arg("out.so")
+            .arg("out.c")
+            .arg("-O3")
+            .spawn()
+            .unwrap();
+
+        let code = gcc.wait_with_output().unwrap();
+        if !code.status.success() {
+            panic!(
+                "Failed to run gcc: {}",
+                String::from_utf8_lossy(code.stdout.as_slice())
+            );
+        }
+
+        std::fs::remove_file("out.c").unwrap();
+        let lib = Box::leak(Box::new(
+            unsafe { libloading::Library::new("./out.so") }.unwrap(),
+        ));
+        let func: libloading::Symbol<fn(*const u8) -> bool> =
+            unsafe { lib.get(b"y2021_d24_execute") }.unwrap();
+
+        const NUM_THREADS: isize = 12;
+        const STRIDE_LENGTH: isize = 1_000_000;
+        const ACTUAL_STRIDE_LENGTH: isize = 9isize.pow(6);
+        let threads: Vec<_> = (0..NUM_THREADS)
+            .map(|_thread_id| {
+                let func = func.clone();
+                std::thread::spawn(move || {
+                    let mut searched: isize = 0;
+                    loop {
+                        let starting_serial = SERIAL.fetch_sub(STRIDE_LENGTH, Ordering::SeqCst);
+                        let base10 = starting_serial.to_string();
+                        let mut serial = [0u8; 14];
+                        for (i, c) in base10.bytes().enumerate() {
+                            serial[i] = c;
+                        }
+                        if starting_serial < 1_000_000_000_000 {
+                            break;
+                        }
+
+                        for _ in 0..ACTUAL_STRIDE_LENGTH {
+                            let serial_index = serial.len() - 1;
+                            sub(&mut serial, serial_index);
+                            if func(serial.as_ptr()) {
+                                println!(
+                                    "Found valid thing: {:?}",
+                                    serial.map(|c| (c + b'0') as char)
+                                );
+                                break;
+                            }
+                            searched += 1;
+                        }
+                    }
+                })
+            })
+            .collect();
+
+        let mut last = SERIAL.load(Ordering::Relaxed);
+        while SERIAL.load(Ordering::Relaxed) >= 1_000_000_000_000 {
+            let now = SERIAL.load(Ordering::Relaxed);
+            println!("checked {} - {}", last - now, now);
+            last = now;
+            std::thread::sleep_ms(1000 * 60);
+        }
+        for thread in threads {
+            thread.join().unwrap();
+        }
+        panic!("Check console for output");
 
         todo!()
     }
@@ -381,9 +515,37 @@ impl AocDay for S {
     }
 }
 
+fn sub<const N: usize>(digits: &mut [u8; N], index: usize) {
+    if digits[index] > 1 {
+        digits[index] -= 1;
+    } else {
+        //We have to borrow
+        if index == 0 {
+            panic!("Would have negative result!");
+        }
+        sub::<N>(digits, index - 1);
+        digits[index] = 9;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_sub() {
+        let mut test: [u8; 3] = [2, 1, 1];
+        sub(&mut test, 2);
+        assert_eq!(test, [1, 9, 9]);
+
+        let mut test: [u8; 3] = [2, 2, 2];
+        sub(&mut test, 2);
+        assert_eq!(test, [2, 2, 1]);
+
+        let mut test: [u8; 3] = [2, 1, 1];
+        sub(&mut test, 2);
+        assert_eq!(test, [1, 9, 9]);
+    }
 
     #[test]
     fn reduce() {
@@ -401,6 +563,6 @@ add z y"#;
         assert_eq!(e, expected);
 
         let expected: Vec<Vec<u8>> = vec![vec![0], vec![0], (1..10).into_iter().collect()];
-        assert_eq!(inputs, expected);
+        //assert_eq!(inputs, expected);
     }
 }
