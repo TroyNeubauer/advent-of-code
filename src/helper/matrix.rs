@@ -70,6 +70,10 @@ impl Matrix<u8> {
         let cols = data.len() / rows;
         Ok(Self { data, cols })
     }
+
+    pub fn print_as_chars(&self) {
+        self.print_with(|c| *c as char);
+    }
 }
 
 impl<T, E> Matrix<T>
@@ -202,6 +206,15 @@ impl<T> Matrix<T> {
         self.data.as_mut_ptr().add(index)
     }
 
+    pub fn wrapping_get(&self, row: isize, col: isize) -> &T {
+        let rows = self.rows();
+        let cols = self.cols();
+        let row = if row < 0 { row.rem_euclid(rows as isize) as usize } else { row as usize % rows };
+        let col = if row < 0 { col.rem_euclid(cols as isize) as usize } else { col as usize % rows };
+        
+        self.get(row, col)
+    }
+
     /// Returns a row major iterator over this matrix
     pub fn iter(&self) -> impl Iterator<Item = &T> {
         self.data.iter()
@@ -307,8 +320,8 @@ impl<T> Matrix<T> {
     where
         F: std::fmt::Display,
     {
-        for col in 0..self.cols() {
-            for row in 0..self.rows() {
+        for row in 0..self.rows() {
+            for col in 0..self.cols() {
                 print!("{}", f(self.get(row, col)));
             }
             println!();
