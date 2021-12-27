@@ -10,6 +10,8 @@ reqwest = { version = "0.11.7", default-features = false, features = ["blocking"
 select = "0.5"
 chrono = "0.4"
 
+vulkano = { git = "https://github.com/vulkano-rs/vulkano.git", branch = "master" }
+vulkano-shaders = "0.27.1"
 libloading = "0.7.2"
 rayon = "1.5.1"
 text_trees = "0.1.2"

@@ -1,7 +1,20 @@
 use std::collections::VecDeque;
 use std::io::Write;
-use std::sync::atomic::{AtomicIsize, Ordering};
+use std::sync::atomic::AtomicIsize;
+use std::sync::Arc;
 use std::time::Instant;
+use vulkano::descriptor_set::WriteDescriptorSet;
+
+use vulkano::buffer::{BufferAccess, BufferUsage, CpuAccessibleBuffer, ImmutableBuffer};
+use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage};
+use vulkano::descriptor_set::{DescriptorSet, PersistentDescriptorSet};
+use vulkano::device::physical::{PhysicalDevice, PhysicalDeviceType};
+use vulkano::device::{Device, DeviceExtensions, Features};
+use vulkano::instance::{Instance, InstanceExtensions};
+use vulkano::pipeline::{ComputePipeline, Pipeline, PipelineBindPoint};
+use vulkano::sync;
+use vulkano::sync::GpuFuture;
+use vulkano::Version;
 
 use crate::traits::*;
 
@@ -180,196 +193,6 @@ impl Program {
 
         Program(program)
     }
-
-    /// Generates the side effect tree for the instruction at index, recursively
-    fn build_side_effects_helper(
-        &self,
-        index: usize,
-        min_index: usize,
-        inp_positions: &[usize],
-        possible_inputs: &mut [Vec<u8>],
-    ) -> SideEffectTree {
-        let ins = self.0[index];
-
-        if let Ins::Mul(_reg, Operand::Literal(0)) = ins {
-            //We know this is 0
-            return SideEffectTree {
-                ins: InstructionOr::KnownValue(0),
-                parents: HashMap::new(),
-                index,
-            };
-        }
-
-        let mut result = SideEffectTree {
-            ins: InstructionOr::Ins(ins),
-            parents: HashMap::new(),
-            index,
-        };
-        let all_regs = ins.get_read_write_registers();
-        //println!("{} `{:?}`", ins, all_regs);
-        for i in (min_index..index).rev() {
-            //println!(" {} checked", i);
-            //check if the register set in this instruction is one of the ones we care about
-            let ins_candidate = self.0[i];
-            let modified_register = ins_candidate.get_modified_register();
-            if all_regs.contains(&modified_register) {
-                if let std::collections::hash_map::Entry::Vacant(ent) =
-                    result.parents.entry(modified_register)
-                {
-                    //println!("  {}", ins_candidate);
-                    let side_effects = self.build_side_effects_helper(
-                        i,
-                        min_index,
-                        inp_positions,
-                        possible_inputs,
-                    );
-                    ent.insert(side_effects);
-                }
-            }
-            if all_regs.len() == result.parents.len() {
-                //println!("  breaking");
-                //We found all the registers we care about
-                break;
-            }
-        }
-        result
-    }
-
-    fn build_side_effects(&self, max_depth: Option<usize>) -> (SideEffectTree, Vec<Vec<u8>>) {
-        let input_indices: Vec<usize> = self
-            .0
-            .iter()
-            .enumerate()
-            .filter_map(|(i, ins)| {
-                if let Ins::Inp(_reg) = ins {
-                    Some(i)
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        let mut possible_inputs = vec![(0..10).into_iter().collect(); input_indices.len()];
-
-        let side_effects = self.build_side_effects_helper(
-            self.0.len() - 1,
-            max_depth.map(|max| self.0.len() - max).unwrap_or(0),
-            input_indices.as_slice(),
-            possible_inputs.as_mut_slice(),
-        );
-
-        let mut next = VecDeque::new();
-        next.push_back(&side_effects);
-
-        println!("Before reduce: {}", side_effects.print_tree());
-        while let Some(effect) = next.pop_front() {
-            for (reg, e) in effect.parents.iter() {
-                if effect.is_input().is_some() && e.parents.len() == 1 {
-                    let input2 = e.parents.iter().next().unwrap().1;
-                    if let Some(inp_reg2) = input2.is_input() {
-                        if *reg == inp_reg2 {
-                            //We found a useless input instruction because it is clobbered by
-                            //another input.
-                            //`input_indices` contains the indices of all input instructions,
-                            //we can use the index in the program to find how many input instructions
-                            //come before this one.
-                            let input_2_index = input_indices.binary_search(&input2.index).unwrap();
-                            possible_inputs[input_2_index].clear();
-                            possible_inputs[input_2_index].push(0);
-                            println!("Found useless: {}", input_2_index);
-                        }
-                    }
-                }
-                next.push_back(e);
-            }
-        }
-
-        (side_effects.reduce(), possible_inputs)
-        //(side_effects, possible_inputs)
-    }
-
-    fn write_to_rust_file(&self, name: &str, input_count: usize) -> std::io::Result<()> {
-        let mut file = std::fs::File::create(name)?;
-        writeln!(
-            file,
-            "{}",
-            r#"
-#include <stdint.h>
-#include <stddef.h>
-#include <stdbool.h>
-
-bool y2021_d24_execute(const uint8_t* input) {
-     size_t w = 0;
-     size_t x = 0;
-     size_t y = 0;
-     size_t z = 0;
-"#
-        )?;
-
-        let mut input_index = 0;
-        for ins in &self.0 {
-            match ins {
-                Ins::Inp(reg) => {
-                    writeln!(file, "    {} = (size_t) input[{}];", reg, input_index)?;
-                    input_index += 1;
-                }
-                Ins::Add(a, b) => writeln!(file, "    {} = {} + {};", a, a, b)?,
-                Ins::Mul(a, b) => writeln!(file, "    {} = {} * {};", a, a, b)?,
-                Ins::Div(a, b) => writeln!(file, "    {} = {} / {};", a, a, b)?,
-                Ins::Mod(a, b) => writeln!(file, "    {} = {} % {};", a, a, b)?,
-                Ins::Eql(a, b) => writeln!(
-                    file,
-                    "    if ({} == {}) {{ {} = 1; }} else {{ {} = 0; }};",
-                    a, b, a, a
-                )?,
-            }
-        }
-
-        assert_eq!(input_count, input_index);
-
-        writeln!(
-            file,
-            "{}",
-            r#"
-    return z == 0;
-}
-"#
-        )?;
-
-        Ok(())
-    }
-}
-
-impl SideEffectTree {
-    fn print_tree(&self) -> text_trees::StringTreeNode {
-        let children = self.parents.iter().map(|(_reg, side)| side.print_tree());
-        text_trees::StringTreeNode::with_child_nodes(self.ins.to_string(), children)
-    }
-
-    fn is_input(&self) -> Option<Register> {
-        if let InstructionOr::Ins(Ins::Inp(reg)) = self.ins {
-            Some(reg)
-        } else {
-            None
-        }
-    }
-
-    fn reduce(mut self) -> Self {
-        if let InstructionOr::Ins(Ins::Add(reg, operand)) = self.ins {
-            if let Operand::Register(reg2) = operand {
-                if let InstructionOr::KnownValue(0) = self.parents.get(&reg2).unwrap().ins {
-                    let parent = self.parents.remove(&reg).unwrap();
-                    //Anything plus a + 0 == a
-                    self = parent;
-                }
-            }
-        }
-        let parents = std::mem::take(&mut self.parents);
-        for (k, v) in parents {
-            self.parents.insert(k, v.reduce());
-        }
-        self
-    }
 }
 
 impl Computer {
@@ -434,91 +257,247 @@ impl AocDay for S {
             .filter_map(|i| if let Ins::Inp(_) = i { Some(()) } else { None })
             .count();
 
-        program.write_to_rust_file("out.c", input_count).unwrap();
+        let mut shader_src = Vec::new();
+        let num_groups = 15625;
+        let local_size = 64;
+        let dispatch_count = num_groups * local_size;
+        //This must be a power of 10 for our math to work out...
+        assert_eq!(f64::log10(dispatch_count as f64) % 1.0, 0.0);
 
-        let gcc = std::process::Command::new("gcc")
-            .arg("-shared")
+        let serials_per_core = 1;
+        let serials_per_dispatch = serials_per_core * dispatch_count;
+        program.write_to_spv(serials_per_core, local_size, &mut shader_src);
+
+        //Run spriv compiler
+        let mut glslc_process = std::process::Command::new("glslc")
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .stdin(std::process::Stdio::piped())
+            .arg("-fshader-stage=compute")
+            .arg("-O")
             .arg("-o")
-            .arg("out.so")
-            .arg("out.c")
-            .arg("-O3")
+            .arg("-")
+            .arg("-")
             .spawn()
             .unwrap();
 
-        let code = gcc.wait_with_output().unwrap();
-        if !code.status.success() {
+        let mut stdin = glslc_process.stdin.take().unwrap();
+        println!("Shader:\n{}", std::str::from_utf8(&shader_src).unwrap());
+        stdin.write_all(shader_src.as_slice()).unwrap();
+        drop(stdin);
+
+        let glslc_out = glslc_process.wait_with_output().unwrap();
+        if !glslc_out.status.success() {
             panic!(
-                "Failed to run gcc: {}",
-                String::from_utf8_lossy(code.stdout.as_slice())
+                "glslc failed: {}",
+                String::from_utf8_lossy(glslc_out.stderr.as_slice())
             );
         }
+        let spv_binary = glslc_out.stdout;
 
-        std::fs::remove_file("out.c").unwrap();
-        let lib = Box::leak(Box::new(
-            unsafe { libloading::Library::new("./out.so") }.unwrap(),
-        ));
-        let func: libloading::Symbol<fn(*const u8) -> bool> =
-            unsafe { lib.get(b"y2021_d24_execute") }.unwrap();
+        // As with other examples, the first step is to create an instance.
+        let instance =
+            Instance::new(None, Version::V1_1, &InstanceExtensions::none(), None).unwrap();
 
-        const NUM_THREADS: isize = 12;
-        const STRIDE_LENGTH: isize = 1_000_000;
-        const ACTUAL_STRIDE_LENGTH: isize = 9isize.pow(6);
-        let threads: Vec<_> = (0..NUM_THREADS)
-            .map(|_thread_id| {
-                let func = func.clone();
-                std::thread::spawn(move || {
-                    let mut searched: isize = 0;
-                    loop {
-                        let starting_serial = SERIAL.fetch_sub(STRIDE_LENGTH, Ordering::SeqCst);
-                        let base10 = starting_serial.to_string();
-                        let mut serial = [0u8; 14];
-                        for (i, c) in base10.bytes().enumerate() {
-                            serial[i] = c;
-                        }
-                        if starting_serial < 1_000_000_000_000 {
-                            break;
-                        }
-
-                        for _ in 0..ACTUAL_STRIDE_LENGTH {
-                            let serial_index = serial.len() - 1;
-                            sub(&mut serial, serial_index);
-                            if func(serial.as_ptr()) {
-                                println!(
-                                    "FOUND IT: {:?} - {:?}",
-                                    serial.map(|c| (c + b'0') as char),
-                                    serial,
-                                );
-                                break;
-                            }
-                            searched += 1;
-                        }
-                    }
-                })
+        // Choose which physical device to use.
+        let device_extensions = DeviceExtensions {
+            khr_storage_buffer_storage_class: true,
+            ..DeviceExtensions::none()
+        };
+        let (physical_device, queue_family) = PhysicalDevice::enumerate(&instance)
+            .filter(|&p| p.supported_extensions().is_superset_of(&device_extensions))
+            .filter_map(|p| {
+                // The Vulkan specs guarantee that a compliant implementation must provide at least one queue
+                // that supports compute operations.
+                p.queue_families()
+                    .find(|&q| q.supports_compute())
+                    .map(|q| (p, q))
             })
-            .collect();
+            .min_by_key(|(p, _)| match p.properties().device_type {
+                PhysicalDeviceType::DiscreteGpu => 0,
+                PhysicalDeviceType::IntegratedGpu => 1,
+                PhysicalDeviceType::VirtualGpu => 2,
+                PhysicalDeviceType::Cpu => 3,
+                PhysicalDeviceType::Other => 4,
+            })
+            .unwrap();
 
-        let mut last = SERIAL.load(Ordering::Relaxed);
-        let mut time = Instant::now();
-        loop {
-            let now = SERIAL.load(Ordering::Relaxed);
-            let delta = time.elapsed();
-            let num_completed = last - now;
-            time = Instant::now();
-            last = now;
-            println!(
-                "checked {} - {} {} nanos per op",
-                num_completed,
-                now,
-                delta.as_secs_f64() * 1_000_000_000.0 / num_completed as f64 * NUM_THREADS as f64
-            );
-            if now < 1_000_000_000_000 {
-                break;
+        println!(
+            "Using device: {} (type: {:?})",
+            physical_device.properties().device_name,
+            physical_device.properties().device_type
+        );
+
+        let mut features = Features::none();
+        features.shader_int64 = true;
+
+        // Now initializing the device.
+        let (device, mut queues) = Device::new(
+            physical_device,
+            &features,
+            &physical_device
+                .required_extensions()
+                .union(&device_extensions),
+            [(queue_family, 0.5)].iter().cloned(),
+        )
+        .unwrap();
+
+        // Since we can request multiple queues, the `queues` variable is in fact an iterator. In this
+        // example we use only one queue, so we just retrieve the first and only element of the
+        // iterator and throw it away.
+        let queue = queues.next().unwrap();
+
+        // Now let's get to the actual example.
+        //
+        // What we are going to do is very basic: we are going to fill a buffer with 64k integers
+        // and ask the GPU to multiply each of them by 12.
+        //
+        // GPUs are very good at parallel computations (SIMD-like operations), and thus will do this
+        // much more quickly than a CPU would do. While a CPU would typically multiply them one by one
+        // or four by four, a GPU will do it by groups of 32 or 64.
+        //
+        // Note however that in a real-life situation for such a simple operation the cost of
+        // accessing memory usually outweighs the benefits of a faster calculation. Since both the CPU
+        // and the GPU will need to access data, there is no other choice but to transfer the data
+        // through the slow PCI express bus.
+
+        // We need to create the compute pipeline that describes our operation.
+        //
+        // If you are familiar with graphics pipeline, the principle is the same except that compute
+        // pipelines are much simpler to create.
+        let pipeline = {
+            let shader = unsafe {
+                vulkano::shader::ShaderModule::from_bytes(Arc::clone(&device), &spv_binary)
             }
-            std::thread::sleep_ms(1000 * 60 * 4);
+            .unwrap();
+
+            ComputePipeline::new(
+                device.clone(),
+                shader.entry_point("main").unwrap(),
+                &(),
+                None,
+                |_| {},
+            )
+            .unwrap()
+        };
+
+        let mut current_serial = 71_999_999_999_999usize;
+        // We start by creating the buffer that will store the data.
+        let data_buffer = {
+            // Iterator that produces the data.
+            let data_iter: Vec<f64> = (0..dispatch_count)
+                .into_iter()
+                .map(|i| current_serial - serials_per_core * i)
+                .map(|n| {
+                    let f = n as f64;
+                    assert_eq!(f as usize, n);
+                    f
+                })
+                .collect();
+
+            // Builds the buffer and fills it with this iterator.
+            CpuAccessibleBuffer::from_iter(
+                Arc::clone(&device),
+                BufferUsage {
+                    storage_buffer: true,
+                    ..BufferUsage::none()
+                },
+                false,
+                data_iter,
+            )
+            .unwrap()
+        };
+
+        current_serial -= serials_per_dispatch;
+
+        // In order to let the shader access the buffer, we need to build a *descriptor set* that
+        // contains the buffer.
+        //
+        // The resources that we bind to the descriptor set must match the resources expected by the
+        // pipeline which we pass as the first parameter.
+        //
+        // If you want to run the pipeline on multiple different buffers, you need to create multiple
+        // descriptor sets that each contain the buffer you want to run the shader on.
+        let layout = pipeline.layout().descriptor_set_layouts().get(0).unwrap();
+        let set = PersistentDescriptorSet::new(
+            layout.clone(),
+            [WriteDescriptorSet::buffer(0, data_buffer.clone())],
+        )
+        .unwrap();
+
+        // In order to execute our operation, we have to build a command buffer.
+        let mut builder = AutoCommandBufferBuilder::primary(
+            device.clone(),
+            queue.family(),
+            CommandBufferUsage::OneTimeSubmit,
+        )
+        .unwrap();
+
+        builder
+            // The command buffer only does one thing: execute the compute pipeline.
+            // This is called a *dispatch* operation.
+            //
+            // Note that we clone the pipeline and the set. Since they are both wrapped around an
+            // `Arc`, this only clones the `Arc` and not the whole pipeline or set (which aren't
+            // cloneable anyway). In this example we would avoid cloning them since this is the last
+            // time we use them, but in a real code you would probably need to clone them.
+            .bind_pipeline_compute(Arc::clone(&pipeline))
+            .bind_descriptor_sets(
+                PipelineBindPoint::Compute,
+                Arc::clone(pipeline.layout()),
+                0,
+                set,
+            )
+            .dispatch([num_groups as u32, 1, 1])
+            .unwrap();
+        // Finish building the command buffer by calling `build`.
+        let command_buffer = builder.build().unwrap();
+
+        let start = Instant::now();
+        // Let's execute this command buffer now.
+        // To do so, we TODO: this is a bit clumsy, probably needs a shortcut
+        let future = sync::now(Arc::clone(&device))
+            .then_execute(Arc::clone(&queue), command_buffer)
+            .unwrap()
+            // This line instructs the GPU to signal a *fence* once the command buffer has finished
+            // execution. A fence is a Vulkan object that allows the CPU to know when the GPU has
+            // reached a certain point.
+            // We need to signal a fence here because below we want to block the CPU until the GPU has
+            // reached that point in the execution.
+            .then_signal_fence_and_flush()
+            .unwrap();
+
+        // Blocks execution until the GPU has finished the operation. This method only exists on the
+        // future that corresponds to a signalled fence. In other words, this method wouldn't be
+        // available if we didn't call `.then_signal_fence_and_flush()` earlier.
+        // The `None` parameter is an optional timeout.
+        //
+        // Note however that dropping the `future` variable (with `drop(future)` for example) would
+        // block execution as well, and this would be the case even if we didn't call
+        // `.then_signal_fence_and_flush()`.
+        // Therefore the actual point of calling `.then_signal_fence_and_flush()` and `.wait()` is to
+        // make things more explicit. In the future, if the Rust language gets linear types vulkano may
+        // get modified so that only fence-signalled futures can get destroyed like this.
+        future.wait(None).unwrap();
+
+        println!(
+            "executing {} serial computes took {:?}",
+            serials_per_dispatch,
+            start.elapsed()
+        );
+
+        // Now that the GPU is done, the content of the buffer should have been modified. Let's
+        // check it out.
+        // The call to `read()` would return an error if the buffer was still in use by the GPU.
+        let data_buffer_content = data_buffer.read().unwrap();
+        for n in 0..100 {
+            let val = data_buffer_content[n as usize];
+            if val != 0.0 {
+                println!("Shader gave: {} at {}", val, n);
+            }
         }
-        for thread in threads {
-            thread.join().unwrap();
-        }
+        println!("Thing finished");
+
         panic!("Check console for output");
 
         todo!()
@@ -578,5 +557,216 @@ add z y"#;
 
         let expected: Vec<Vec<u8>> = vec![vec![0], vec![0], (1..10).into_iter().collect()];
         //assert_eq!(inputs, expected);
+    }
+}
+
+impl Program {
+    fn write_to_c_file(&self, name: &str, input_count: usize) -> std::io::Result<()> {
+        let mut file = std::fs::File::create(name)?;
+        writeln!(
+            file,
+            "{}",
+            r#"
+#include <stdint.h>
+#include <stddef.h>
+#include <stdbool.h>
+
+bool y2021_d24_execute(const uint8_t* input) {
+     size_t w = 0;
+     size_t x = 0;
+     size_t y = 0;
+     size_t z = 0;
+"#
+        )?;
+
+        let mut input_index = 0;
+        for ins in &self.0 {
+            match ins {
+                Ins::Inp(reg) => {
+                    writeln!(file, "    {} = (size_t) input[{}];", reg, input_index)?;
+                    input_index += 1;
+                }
+                Ins::Add(a, b) => writeln!(file, "    {} = {} + {};", a, a, b)?,
+                Ins::Mul(a, b) => writeln!(file, "    {} = {} * {};", a, a, b)?,
+                Ins::Div(a, b) => writeln!(file, "    {} = {} / {};", a, a, b)?,
+                Ins::Mod(a, b) => writeln!(file, "    {} = {} % {};", a, a, b)?,
+                Ins::Eql(a, b) => writeln!(
+                    file,
+                    "    if ({} == {}) {{ {} = 1; }} else {{ {} = 0; }};",
+                    a, b, a, a
+                )?,
+            }
+        }
+
+        assert_eq!(input_count, input_index);
+
+        writeln!(
+            file,
+            "{}",
+            r#"
+    return z == 0;
+}
+"#
+        )?;
+
+        Ok(())
+    }
+
+    /// Writes this program to a GLSL compute shader source
+    /// `serials_per_core`: the amount of sequential serial numbers per core, must be a power of 10
+    fn write_to_spv(&self, serials_per_core: usize, local_size: usize, out: &mut Vec<u8>) {
+        writeln!(
+            out,
+            "{}",
+            r#"
+#version 450
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) buffer Data {
+    double data[];
+} data;
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    double input_serial = data.data[idx];
+    int serial_digits[14];
+
+    for (int i = 13; i >= 0; i--) {
+        int digit = int(input_serial - 10 * (input_serial / 10));
+        serial_digits[i] = digit;
+        input_serial /= 10;
+    }
+
+    /*
+    double serial = 0;
+    for (int i = 0; i < 14; i++) {{
+        int digit = serial_digits[i];
+        if (digit != 0) {
+            serial = serial * 10 + double(digit);
+        }
+    }}
+    */
+    data.data[idx] = double(serial_digits[0]);
+}"#
+        )
+        .unwrap();
+        return;
+        writeln!(
+            out,
+            r#"
+#version 450
+#extension GL_ARB_gpu_shader_int64 : enable
+
+layout(local_size_x = {}, local_size_y = 1, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) buffer Data {{
+    uint64_t data[];
+}} data;
+
+void main() {{
+    uint idx = gl_GlobalInvocationID.x;
+    uint64_t input_serial = data.data[idx];
+    int serial_digits[14];
+    /*
+
+    for (int i = 13; i >= 0; i--) {{
+        serial_digits[i] = int(input_serial % 10);
+        input_serial /= 10;
+    }}
+    "#,
+            local_size
+        )
+        .unwrap();
+
+        let serials_per_core_pow = f64::log10(serials_per_core as f64);
+        assert_eq!(serials_per_core_pow % 1.0, 0.0);
+        let serials_per_core_adjusted = 9usize.pow(serials_per_core_pow as u32);
+
+        writeln!(
+            out,
+            r#"
+    for (int i = 0; i < {}; i++) {{
+        int w = 0;
+        int x = 0;
+        int y = 0;
+        int z = 0;"#,
+            serials_per_core_adjusted
+        )
+        .unwrap();
+
+        let mut input_index = 0;
+        for ins in &self.0 {
+            match ins {
+                Ins::Inp(reg) => {
+                    writeln!(out, "        {} = serial_digits[{}];", reg, input_index).unwrap();
+                    input_index += 1;
+                }
+                Ins::Add(a, b) => writeln!(out, "        {} = {} + {};", a, a, b).unwrap(),
+                Ins::Mul(a, b) => writeln!(out, "        {} = {} * {};", a, a, b).unwrap(),
+                Ins::Div(a, b) => writeln!(out, "        {} = {} / {};", a, a, b).unwrap(),
+                Ins::Mod(a, b) => writeln!(out, "        {} = {} % {};", a, a, b).unwrap(),
+                Ins::Eql(a, b) => writeln!(out, "        {} = int({} == {});", a, a, b).unwrap(),
+            }
+        }
+
+        writeln!(
+            out,
+            r#"
+
+        if (z == 0 || true) {{
+            uint64_t serial = 0;
+            for (int i = 0; i < 14; i++) {{
+                serial = serial * 10 + serial_digits[i];
+            }}
+            //data.data[idx] = serial;
+            data.data[idx] = input_serial - 2;
+        }}
+        //End of the main for loop. We need to decrement the serial
+        for (int j = 13; j >= 0; j--) {{
+            if (serial_digits[j] > 1) {{
+                serial_digits[j] -= 1;
+                break;
+            }} else {{
+                serial_digits[j] = 9;
+            }}
+        }}
+    }}
+    */
+}}"#
+        )
+        .unwrap();
+    }
+}
+
+impl SideEffectTree {
+    fn print_tree(&self) -> text_trees::StringTreeNode {
+        let children = self.parents.iter().map(|(_reg, side)| side.print_tree());
+        text_trees::StringTreeNode::with_child_nodes(self.ins.to_string(), children)
+    }
+
+    fn is_input(&self) -> Option<Register> {
+        if let InstructionOr::Ins(Ins::Inp(reg)) = self.ins {
+            Some(reg)
+        } else {
+            None
+        }
+    }
+
+    fn reduce(mut self) -> Self {
+        if let InstructionOr::Ins(Ins::Add(reg, operand)) = self.ins {
+            if let Operand::Register(reg2) = operand {
+                if let InstructionOr::KnownValue(0) = self.parents.get(&reg2).unwrap().ins {
+                    let parent = self.parents.remove(&reg).unwrap();
+                    //Anything plus a + 0 == a
+                    self = parent;
+                }
+            }
+        }
+        let parents = std::mem::take(&mut self.parents);
+        for (k, v) in parents {
+            self.parents.insert(k, v.reduce());
+        }
+        self
     }
 }
