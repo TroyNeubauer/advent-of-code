@@ -258,15 +258,15 @@ impl AocDay for S {
             .count();
 
         let mut shader_src = Vec::new();
-        let num_groups = 15625;
-        let local_size = 64;
-        let dispatch_count = num_groups * local_size;
+        const NUM_GROUPS: usize = 15625;
+        const LOCAL_SIZE: usize = 64;
+        const DISPATCH_COUNT: usize = NUM_GROUPS * LOCAL_SIZE;
         //This must be a power of 10 for our math to work out...
-        assert_eq!(f64::log10(dispatch_count as f64) % 1.0, 0.0);
+        assert_eq!(f64::log10(DISPATCH_COUNT as f64) % 1.0, 0.0);
 
-        let serials_per_core = 1;
-        let serials_per_dispatch = serials_per_core * dispatch_count;
-        program.write_to_spv(serials_per_core, local_size, &mut shader_src);
+        const SERIALS_PER_THREAD: usize = 1000;
+        const SERIALS_PER_DISPATCH: usize = SERIALS_PER_THREAD * DISPATCH_COUNT;
+        program.write_to_spv(SERIALS_PER_THREAD, LOCAL_SIZE, &mut shader_src);
 
         //Run spriv compiler
         let mut glslc_process = std::process::Command::new("glslc")
@@ -282,7 +282,14 @@ impl AocDay for S {
             .unwrap();
 
         let mut stdin = glslc_process.stdin.take().unwrap();
-        println!("Shader:\n{}", std::str::from_utf8(&shader_src).unwrap());
+        println!("Shader:");
+        for (i, line) in std::str::from_utf8(&shader_src)
+            .unwrap()
+            .lines()
+            .enumerate()
+        {
+            println!("{: >3}|{}", i, line);
+        }
         stdin.write_all(shader_src.as_slice()).unwrap();
         drop(stdin);
 
@@ -298,6 +305,12 @@ impl AocDay for S {
         // As with other examples, the first step is to create an instance.
         let instance =
             Instance::new(None, Version::V1_1, &InstanceExtensions::none(), None).unwrap();
+
+        let _callback =
+            vulkano::instance::debug::DebugCallback::errors_and_warnings(&instance, |msg| {
+                println!("Debug CB: {:?}", msg.description);
+            })
+            .ok();
 
         // Choose which physical device to use.
         let device_extensions = DeviceExtensions {
@@ -328,8 +341,7 @@ impl AocDay for S {
             physical_device.properties().device_type
         );
 
-        let mut features = Features::none();
-        features.shader_int64 = true;
+        let features = Features::none();
 
         // Now initializing the device.
         let (device, mut queues) = Device::new(
@@ -382,123 +394,178 @@ impl AocDay for S {
         };
 
         let mut current_serial = 71_999_999_999_999usize;
-        // We start by creating the buffer that will store the data.
-        let data_buffer = {
-            // Iterator that produces the data.
-            let data_iter: Vec<f64> = (0..dispatch_count)
-                .into_iter()
-                .map(|i| current_serial - serials_per_core * i)
-                .map(|n| {
-                    let f = n as f64;
-                    assert_eq!(f as usize, n);
-                    f
-                })
-                .collect();
 
-            // Builds the buffer and fills it with this iterator.
-            CpuAccessibleBuffer::from_iter(
-                Arc::clone(&device),
-                BufferUsage {
-                    storage_buffer: true,
-                    ..BufferUsage::none()
-                },
-                false,
-                data_iter,
-            )
-            .unwrap()
-        };
+        let mut last_start = Instant::now();
+        while current_serial > 10_000_000_000_000 {
+            println!("Ruining {} - {:?}", current_serial, last_start.elapsed());
+            last_start = Instant::now();
+            let in_buffer = {
+                // Iterator that produces the data.
+                let data_iter: Vec<[u8; 16]> = (0..)
+                    .into_iter()
+                    .map(|i| current_serial - SERIALS_PER_THREAD * i)
+                    .filter_map(|n| {
+                        let mut base10 = format!("{:0>14}", n);
+                        if base10.contains('0') {
+                            None
+                        } else {
+                            base10.push_str("00");
+                            let mut vec: Vec<u8> = base10.into();
+                            vec.iter_mut().for_each(|a| *a -= b'0');
+                            let mut dst = [0u8; 16];
+                            dst.copy_from_slice(&vec);
+                            Some(dst)
+                        }
+                    })
+                    .take(DISPATCH_COUNT)
+                    .collect();
 
-        current_serial -= serials_per_dispatch;
+                // Builds the buffer and fills it with this iterator.
+                CpuAccessibleBuffer::from_iter(
+                    Arc::clone(&device),
+                    BufferUsage {
+                        storage_buffer: true,
+                        ..BufferUsage::none()
+                    },
+                    false,
+                    data_iter,
+                )
+                .unwrap()
+            };
 
-        // In order to let the shader access the buffer, we need to build a *descriptor set* that
-        // contains the buffer.
-        //
-        // The resources that we bind to the descriptor set must match the resources expected by the
-        // pipeline which we pass as the first parameter.
-        //
-        // If you want to run the pipeline on multiple different buffers, you need to create multiple
-        // descriptor sets that each contain the buffer you want to run the shader on.
-        let layout = pipeline.layout().descriptor_set_layouts().get(0).unwrap();
-        let set = PersistentDescriptorSet::new(
-            layout.clone(),
-            [WriteDescriptorSet::buffer(0, data_buffer.clone())],
-        )
-        .unwrap();
-
-        // In order to execute our operation, we have to build a command buffer.
-        let mut builder = AutoCommandBufferBuilder::primary(
-            device.clone(),
-            queue.family(),
-            CommandBufferUsage::OneTimeSubmit,
-        )
-        .unwrap();
-
-        builder
-            // The command buffer only does one thing: execute the compute pipeline.
-            // This is called a *dispatch* operation.
+            // In order to let the shader access the buffer, we need to build a *descriptor set* that
+            // contains the buffer.
             //
-            // Note that we clone the pipeline and the set. Since they are both wrapped around an
-            // `Arc`, this only clones the `Arc` and not the whole pipeline or set (which aren't
-            // cloneable anyway). In this example we would avoid cloning them since this is the last
-            // time we use them, but in a real code you would probably need to clone them.
-            .bind_pipeline_compute(Arc::clone(&pipeline))
-            .bind_descriptor_sets(
-                PipelineBindPoint::Compute,
-                Arc::clone(pipeline.layout()),
-                0,
-                set,
+            // The resources that we bind to the descriptor set must match the resources expected by the
+            // pipeline which we pass as the first parameter.
+            //
+            // If you want to run the pipeline on multiple different buffers, you need to create multiple
+            // descriptor sets that each contain the buffer you want to run the shader on.
+            let layouts = pipeline.layout().descriptor_set_layouts();
+            let layout = layouts.get(0).unwrap();
+            let set = PersistentDescriptorSet::new(
+                layout.clone(),
+                [WriteDescriptorSet::buffer(0, in_buffer.clone())],
             )
-            .dispatch([num_groups as u32, 1, 1])
-            .unwrap();
-        // Finish building the command buffer by calling `build`.
-        let command_buffer = builder.build().unwrap();
-
-        let start = Instant::now();
-        // Let's execute this command buffer now.
-        // To do so, we TODO: this is a bit clumsy, probably needs a shortcut
-        let future = sync::now(Arc::clone(&device))
-            .then_execute(Arc::clone(&queue), command_buffer)
-            .unwrap()
-            // This line instructs the GPU to signal a *fence* once the command buffer has finished
-            // execution. A fence is a Vulkan object that allows the CPU to know when the GPU has
-            // reached a certain point.
-            // We need to signal a fence here because below we want to block the CPU until the GPU has
-            // reached that point in the execution.
-            .then_signal_fence_and_flush()
             .unwrap();
 
-        // Blocks execution until the GPU has finished the operation. This method only exists on the
-        // future that corresponds to a signalled fence. In other words, this method wouldn't be
-        // available if we didn't call `.then_signal_fence_and_flush()` earlier.
-        // The `None` parameter is an optional timeout.
-        //
-        // Note however that dropping the `future` variable (with `drop(future)` for example) would
-        // block execution as well, and this would be the case even if we didn't call
-        // `.then_signal_fence_and_flush()`.
-        // Therefore the actual point of calling `.then_signal_fence_and_flush()` and `.wait()` is to
-        // make things more explicit. In the future, if the Rust language gets linear types vulkano may
-        // get modified so that only fence-signalled futures can get destroyed like this.
-        future.wait(None).unwrap();
+            //let mut current_serial = 98_765_432_198_766usize;
+            // We start by creating the buffer that will store the data.
+            let in_buffer = {
+                // Iterator that produces the data.
+                let data_iter: Vec<[u8; 16]> = (0..)
+                    .into_iter()
+                    .map(|i| current_serial - SERIALS_PER_THREAD * i)
+                    .filter_map(|n| {
+                        let mut base10 = format!("{:0>14}", n);
+                        if base10.contains('0') {
+                            None
+                        } else {
+                            base10.push_str("00");
+                            let mut vec: Vec<u8> = base10.into();
+                            vec.iter_mut().for_each(|a| *a -= b'0');
+                            let mut dst = [0u8; 16];
+                            dst.copy_from_slice(&vec);
+                            Some(dst)
+                        }
+                    })
+                    .take(DISPATCH_COUNT)
+                    .collect();
 
-        println!(
-            "executing {} serial computes took {:?}",
-            serials_per_dispatch,
-            start.elapsed()
-        );
+                // Builds the buffer and fills it with this iterator.
+                CpuAccessibleBuffer::from_iter(
+                    Arc::clone(&device),
+                    BufferUsage {
+                        storage_buffer: true,
+                        ..BufferUsage::none()
+                    },
+                    false,
+                    data_iter,
+                )
+                .unwrap()
+            };
 
-        // Now that the GPU is done, the content of the buffer should have been modified. Let's
-        // check it out.
-        // The call to `read()` would return an error if the buffer was still in use by the GPU.
-        let data_buffer_content = data_buffer.read().unwrap();
-        for n in 0..100 {
-            let val = data_buffer_content[n as usize];
-            if val != 0.0 {
-                println!("Shader gave: {} at {}", val, n);
+            current_serial -= SERIALS_PER_DISPATCH;
+
+            // In order to execute our operation, we have to build a command buffer.
+            let mut builder = AutoCommandBufferBuilder::primary(
+                device.clone(),
+                queue.family(),
+                CommandBufferUsage::OneTimeSubmit,
+            )
+            .unwrap();
+
+            builder
+                // The command buffer only does one thing: execute the compute pipeline.
+                // This is called a *dispatch* operation.
+                //
+                // Note that we clone the pipeline and the set. Since they are both wrapped around an
+                // `Arc`, this only clones the `Arc` and not the whole pipeline or set (which aren't
+                // cloneable anyway). In this example we would avoid cloning them since this is the last
+                // time we use them, but in a real code you would probably need to clone them.
+                .bind_pipeline_compute(Arc::clone(&pipeline))
+                .bind_descriptor_sets(
+                    PipelineBindPoint::Compute,
+                    Arc::clone(pipeline.layout()),
+                    0,
+                    set.clone(),
+                )
+                .dispatch([NUM_GROUPS as u32, 1, 1])
+                .unwrap();
+            // Finish building the command buffer by calling `build`.
+            let command_buffer = builder.build().unwrap();
+
+            // Let's execute this command buffer now.
+            // To do so, we TODO: this is a bit clumsy, probably needs a shortcut
+            let future = sync::now(Arc::clone(&device))
+                .then_execute(Arc::clone(&queue), command_buffer)
+                .unwrap()
+                // This line instructs the GPU to signal a *fence* once the command buffer has finished
+                // execution. A fence is a Vulkan object that allows the CPU to know when the GPU has
+                // reached a certain point.
+                // We need to signal a fence here because below we want to block the CPU until the GPU has
+                // reached that point in the execution.
+                .then_signal_fence_and_flush()
+                .unwrap();
+
+            // Blocks execution until the GPU has finished the operation. This method only exists on the
+            // future that corresponds to a signalled fence. In other words, this method wouldn't be
+            // available if we didn't call `.then_signal_fence_and_flush()` earlier.
+            // The `None` parameter is an optional timeout.
+            //
+            // Note however that dropping the `future` variable (with `drop(future)` for example) would
+            // block execution as well, and this would be the case even if we didn't call
+            // `.then_signal_fence_and_flush()`.
+            // Therefore the actual point of calling `.then_signal_fence_and_flush()` and `.wait()` is to
+            // make things more explicit. In the future, if the Rust language gets linear types vulkano may
+            // get modified so that only fence-signalled futures can get destroyed like this.
+            future.wait(None).unwrap();
+
+            // Now that the GPU is done, the content of the buffer should have been modified. Let's
+            // check it out.
+            // The call to `read()` would return an error if the buffer was still in use by the GPU.
+            let data_buffer_content = in_buffer.read().unwrap();
+            let mut found_solution = false;
+            for n in 0..100 {
+                let mut s: String = data_buffer_content[n]
+                    .into_iter()
+                    .map(|a| (a + b'0') as char)
+                    .collect();
+                s.remove(14);
+                s.remove(14);
+                let num: usize = s.parse().unwrap();
+                if num != 0 {
+                    println!("{}: {}", n, num);
+                    //found_solution = true;
+                }
+            }
+            if found_solution {
+                panic!("Found solution!");
             }
         }
         println!("Thing finished");
 
-        panic!("Check console for output");
+        panic!("Failed to find solution");
 
         todo!()
     }
@@ -615,65 +682,84 @@ bool y2021_d24_execute(const uint8_t* input) {
     /// Writes this program to a GLSL compute shader source
     /// `serials_per_core`: the amount of sequential serial numbers per core, must be a power of 10
     fn write_to_spv(&self, serials_per_core: usize, local_size: usize, out: &mut Vec<u8>) {
-        writeln!(
-            out,
-            "{}",
-            r#"
-#version 450
 
-layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
-
-layout(set = 0, binding = 0) buffer Data {
-    double data[];
-} data;
-
-void main() {
-    uint idx = gl_GlobalInvocationID.x;
-    double input_serial = data.data[idx];
-    int serial_digits[14];
-
-    for (int i = 13; i >= 0; i--) {
-        int digit = int(input_serial - 10 * (input_serial / 10));
-        serial_digits[i] = digit;
-        input_serial /= 10;
-    }
-
-    /*
-    double serial = 0;
-    for (int i = 0; i < 14; i++) {{
-        int digit = serial_digits[i];
-        if (digit != 0) {
-            serial = serial * 10 + double(digit);
-        }
-    }}
-    */
-    data.data[idx] = double(serial_digits[0]);
-}"#
-        )
-        .unwrap();
-        return;
-        writeln!(
+writeln!(
             out,
             r#"
 #version 450
-#extension GL_ARB_gpu_shader_int64 : enable
 
 layout(local_size_x = {}, local_size_y = 1, local_size_z = 1) in;
 
 layout(set = 0, binding = 0) buffer Data {{
-    uint64_t data[];
+    uvec4 data[];
 }} data;
 
 void main() {{
     uint idx = gl_GlobalInvocationID.x;
-    uint64_t input_serial = data.data[idx];
-    int serial_digits[14];
-    /*
 
-    for (int i = 13; i >= 0; i--) {{
-        serial_digits[i] = int(input_serial % 10);
-        input_serial /= 10;
-    }}
+    data.data[idx] = uvec4(0, 0, 0, 0);
+}}
+    "#,
+            local_size
+        )
+        .unwrap();
+        return;
+
+        writeln!(
+            out,
+            r#"
+#version 450
+
+layout(local_size_x = {}, local_size_y = 1, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) buffer Data {{
+    uvec4 data[];
+}} data;
+
+float real_floor(float x) {{
+    return x + -sign(x) * abs(fract(x));
+}}
+
+uint pack_uints(uint a, uint b, uint c, uint d) {{
+    return
+        (a & 0xFF) << 24 |
+        (b & 0xFF) << 16 |
+        (c & 0xFF) <<  8 |
+        (d & 0xFF) <<  0
+    ;
+}}
+
+void main() {{
+    uint idx = gl_GlobalInvocationID.x;
+    uvec4 input_serial = data.data[idx];
+
+    data.data[idx] = uvec4(0, 0, 0, 0);
+    /*
+    return;
+
+    uint serial_digits[16];
+    bool has_solution = false;
+    uvec4 solution;
+
+    serial_digits[ 0] = (input_serial.x >> 24) & 0xFF;
+    serial_digits[ 1] = (input_serial.x >> 16) & 0xFF;
+    serial_digits[ 2] = (input_serial.x >>  8) & 0xFF;
+    serial_digits[ 3] = (input_serial.x >>  0) & 0xFF;
+
+    serial_digits[ 4] = (input_serial.y >> 24) & 0xFF;
+    serial_digits[ 5] = (input_serial.y >> 16) & 0xFF;
+    serial_digits[ 6] = (input_serial.y >>  8) & 0xFF;
+    serial_digits[ 7] = (input_serial.y >>  0) & 0xFF;
+
+    serial_digits[ 8] = (input_serial.z >> 24) & 0xFF;
+    serial_digits[ 9] = (input_serial.z >> 16) & 0xFF;
+    serial_digits[10] = (input_serial.z >>  8) & 0xFF;
+    serial_digits[11] = (input_serial.z >>  0) & 0xFF;
+
+    serial_digits[12] = (input_serial.w >> 24) & 0xFF;
+    serial_digits[13] = (input_serial.w >> 16) & 0xFF;
+    serial_digits[14] = (input_serial.w >>  8) & 0xFF;
+    serial_digits[15] = (input_serial.w >>  0) & 0xFF;
     "#,
             local_size
         )
@@ -687,10 +773,10 @@ void main() {{
             out,
             r#"
     for (int i = 0; i < {}; i++) {{
-        int w = 0;
-        int x = 0;
-        int y = 0;
-        int z = 0;"#,
+        uint w = 0;
+        uint x = 0;
+        uint y = 0;
+        uint z = 0;"#,
             serials_per_core_adjusted
         )
         .unwrap();
@@ -705,8 +791,10 @@ void main() {{
                 Ins::Add(a, b) => writeln!(out, "        {} = {} + {};", a, a, b).unwrap(),
                 Ins::Mul(a, b) => writeln!(out, "        {} = {} * {};", a, a, b).unwrap(),
                 Ins::Div(a, b) => writeln!(out, "        {} = {} / {};", a, a, b).unwrap(),
-                Ins::Mod(a, b) => writeln!(out, "        {} = {} % {};", a, a, b).unwrap(),
-                Ins::Eql(a, b) => writeln!(out, "        {} = int({} == {});", a, a, b).unwrap(),
+                Ins::Mod(a, b) => {
+                    writeln!(out, "        {} = {} - {} * ({} / {});", a, a, b, a, b).unwrap()
+                }
+                Ins::Eql(a, b) => writeln!(out, "        {} = uint({} == {});", a, a, b).unwrap(),
             }
         }
 
@@ -714,13 +802,15 @@ void main() {{
             out,
             r#"
 
-        if (z == 0 || true) {{
-            uint64_t serial = 0;
-            for (int i = 0; i < 14; i++) {{
-                serial = serial * 10 + serial_digits[i];
-            }}
-            //data.data[idx] = serial;
-            data.data[idx] = input_serial - 2;
+        if (z == 0) {{
+            solution = uvec4(
+                pack_uints(serial_digits[ 0], serial_digits[ 1], serial_digits[ 2], serial_digits[ 3]),
+                pack_uints(serial_digits[ 4], serial_digits[ 5], serial_digits[ 6], serial_digits[ 7]),
+                pack_uints(serial_digits[ 8], serial_digits[ 9], serial_digits[10], serial_digits[11]),
+                pack_uints(serial_digits[12], serial_digits[13], serial_digits[14], serial_digits[15])
+            );
+            //has_solution = true;
+            break;
         }}
         //End of the main for loop. We need to decrement the serial
         for (int j = 13; j >= 0; j--) {{
@@ -732,6 +822,13 @@ void main() {{
             }}
         }}
     }}
+
+    if (has_solution) {{
+        data.data[idx] = solution;
+    }} else {{
+        data.data[idx] = uvec4(0, 0, 0, 0);
+    }}
+    data.data[idx] = uvec4(0, 0, 0, 0);
     */
 }}"#
         )
