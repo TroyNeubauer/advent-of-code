@@ -189,8 +189,7 @@ fn main() {
 
             let year = now
                 .year()
-                .try_into()
-                .expect("System time set to before CE!");
+                .try_into().unwrap();
             if opts.year.is_none() {
                 debug!("Overriding year to be {}", year);
             }

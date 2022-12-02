@@ -49,8 +49,8 @@ impl Input {
         self.0.lines()
     }
 
-    pub fn lines_bytes<'a>(&'a self) -> Box<dyn Iterator<Item = &'a[u8]> + 'a> {
-        Box::new(self.0.as_bytes().split(|&b| b == b'\n'))
+    pub fn lines_bytes<'a>(&'a self) -> impl Iterator<Item = &'a[u8]> + 'a> {
+        self.0.as_bytes().split(|&b| b == b'\n')
     }
 
     pub fn as_str(&self) -> &str {

@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "util",
+    "y2020",
+    "y2021",
+    "y2022",
+]
