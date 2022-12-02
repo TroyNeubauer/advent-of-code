@@ -1,16 +1,4 @@
-#![allow(dead_code)]
-mod helper;
-mod traits;
-mod util;
-mod years;
-
-#[macro_use]
-extern crate combine;
-
-use util::{Day, Problems};
-
-use traits::AocDay;
-use years::*;
+use crate::{Day, Problems};
 
 use chrono::Datelike;
 use clap::Parser;

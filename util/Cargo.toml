@@ -1,0 +1,30 @@
+[package]
+name = "util"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = "3.0.0-beta.5"
+scanfmt = "0.1"
+reqwest = { version = "0.11.7", default-features = false, features = ["blocking", "cookies", "cookie_store", "rustls-tls"] }
+select = "0.5"
+chrono = "0.4"
+
+vulkano = { git = "https://github.com/vulkano-rs/vulkano.git", branch = "master" }
+vulkano-shaders = "0.27.1"
+libloading = "0.7.2"
+rayon = "1.5.1"
+text_trees = "0.1.2"
+combine = "4.6.2"
+bitset-core = "0.1.1"
+bitstream-io = "1.2.0"
+data-encoding = "2.3.2"
+itertools = "0.10.3"
+serde = { version = "1.0", features = ["derive", "rc"] }
+log = "0.4"
+env_logger = "0.9"
+serde_fs = { path = "../../serde_fs/" }
+nom = "7.1.0"
+rand = "0.8"
+vector2d = "2.2.0"
+pathfinding = "3.0.5"

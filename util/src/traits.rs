@@ -1,6 +1,8 @@
-use std::{str::{FromStr, Lines}, slice::Split};
+use std::{
+    slice::Split,
+    str::{FromStr, Lines},
+};
 
-pub use crate::helper::*;
 pub use std::collections::HashMap;
 
 pub type Error = Box<dyn std::error::Error>;
@@ -36,20 +38,18 @@ impl Input {
             .collect()
     }
 
-    pub fn nums<T>(&self) -> Vec<T>
+    pub fn nums<T>(&self) -> impl Iterator<Item = T> + '_
     where
         T: FromStr,
     {
-        self.lines()
-            .filter_map(|line| line.parse::<T>().ok())
-            .collect()
+        self.lines().filter_map(|line| line.parse::<T>().ok())
     }
 
     pub fn lines(&self) -> Lines {
         self.0.lines()
     }
 
-    pub fn lines_bytes<'a>(&'a self) -> impl Iterator<Item = &'a[u8]> + 'a> {
+    pub fn lines_bytes(&self) -> impl Iterator<Item = &'_ [u8]> + '_ {
         self.0.as_bytes().split(|&b| b == b'\n')
     }
 
