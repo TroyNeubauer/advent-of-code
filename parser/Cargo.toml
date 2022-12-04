@@ -1,0 +1,15 @@
+[package]
+name = "parser"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.66"
+log = "0.4"
+reqwest = { version = "0.11.7", default-features = false, features = ["blocking", "cookies", "cookie_store", "rustls-tls"] }
+select = "0.5"
+
+[dev-dependencies]
+env_logger = "0.10.0"
+pretty_assertions = "1.3.0"
+test-log = "0.2.11"
