@@ -1,14 +1,16 @@
+use anyhow::Result;
 use chrono::Datelike;
 use log::*;
 use select::document::Document;
 use select::node::Node;
 use select::predicate::{Attr, Name, Predicate};
 use serde::{Deserialize, Serialize};
+use std::time::Duration as StdDuration;
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::traits::Error;
+use crate::Output;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Test {
@@ -21,10 +23,26 @@ pub struct Test {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Data {
     pub input: String,
-    #[serde(rename = "p1")]
-    pub part1: Option<Test>,
-    #[serde(rename = "p2")]
-    pub part2: Option<Test>,
+    //#[serde(flatten, with = "prefix_p1")]
+    pub p1: Option<Test>,
+    pub p1_ans: Option<Output>,
+    //#[serde(flatten, with = "prefix_p2")]
+    pub p2: Option<Test>,
+    pub p2_ans: Option<Output>,
+    pub part: Part,
+}
+
+//with_prefix!(prefix_p1 "p1_");
+//with_prefix!(prefix_p2 "p2_");
+
+impl Data {
+    pub fn is_part1_solved(&self) -> bool {
+        self.p1_ans.is_some()
+    }
+
+    pub fn is_part2_solved(&self) -> bool {
+        self.p2_ans.is_some()
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
@@ -33,24 +51,27 @@ pub struct Day {
     pub day: u32,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-enum Part {
+/// The current part we are solving, or complete if we have both stars
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub enum Part {
     Part1,
     Part2,
+    Complete,
 }
 
 impl std::fmt::Display for Part {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match *self {
             Part::Part1 => "part1",
             Part::Part2 => "part2",
+            Part::Complete => "complete",
         };
         f.write_str(s)
     }
 }
 
 impl std::fmt::Display for Day {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!("{} day {}", self.year, self.day))
     }
 }
@@ -59,15 +80,11 @@ impl std::fmt::Display for Day {
 pub struct Problems {
     /// Mapping of years to days to problem data
     //TODO: Make better once serde_fs supports more types as keys
-    years: HashMap<u32, HashMap<u32, Data>>,
+    days: HashMap<u32, Data>,
     pub session: String,
 }
 
-fn parse_tests(
-    desc_body: &str,
-    day: Day,
-    tests_required: bool,
-) -> Result<(Option<Test>, Option<Test>), Error> {
+fn parse_tests(desc_body: &str, day: Day) -> Result<(Option<Test>, Option<Test>, Part)> {
     let document = Document::from(desc_body);
 
     let mut test_inputs = Vec::new();
@@ -88,13 +105,11 @@ fn parse_tests(
         std::process::exit(1);
     }
     let part2 = part2.get(0);
+    dbg!(part2);
 
     if test_inputs.is_empty() {
         error!("Unable to find examples for tests. Please fill in the files in `.problems`");
         error!("Possible Solutions: {:?}", test_outputs);
-        if tests_required {
-            return Err("Failed parse any tests".into());
-        }
     }
 
     let mut part1_inputs = Vec::new();
@@ -229,66 +244,66 @@ fn parse_tests(
             }
         }
     }
-    Ok((test1, test2))
+    Ok((
+        test1,
+        test2,
+        part2.map(|_| Part::Part2).unwrap_or(Part::Part1),
+    ))
 }
 
 fn wait_for_time(day: Day) {
-    let now = chrono::Local::now().naive_local();
-    if now.year() as u32 == day.year && now.day() < day.day {
-        //We need to wait for the challenge to start
-        let publish_time =
-            chrono::NaiveDate::from_ymd(day.year as i32, 12, day.day).and_hms(0, 0, 0);
-        let sleep_time = publish_time - now;
-        info!("Challenge publishing in {:?}", sleep_time);
-        //Sleep until 100 ms before the challenge comes out
-        std::thread::sleep(sleep_time.to_std().unwrap());
+    let now_millis = chrono::Local::now().naive_local().timestamp_millis();
+    // AOC releases at midnight in the eastern american timezone
+    let est = chrono_tz::Tz::America__New_York;
+    // We need to wait for the challenge to start
+    let publish_millis = chrono::NaiveDate::from_ymd_opt(day.year as i32, 12, day.day)
+        .unwrap()
+        .and_hms_opt(0, 0, 0)
+        .unwrap()
+        .and_local_timezone(est)
+        .unwrap()
+        .timestamp_millis();
+
+    // may be negitive if the challenge opened in the past
+    let sleep_time = (publish_millis - now_millis)
+        .try_into()
+        .ok()
+        .map(|millis| StdDuration::from_millis(millis));
+
+    info!("Challenge publishing in {:?}", sleep_time);
+    if let Some(sleep_for) = sleep_time {
+        std::thread::sleep(sleep_for);
         info!("Awoke for challenge");
     }
 }
 
-pub fn build_client(session: &str) -> Result<reqwest::blocking::Client, Error> {
-    let jar = Arc::new(reqwest::cookie::Jar::default());
-    jar.add_cookie_str(
-        &format!("session={}", session),
-        &"https://adventofcode.com".parse().unwrap(),
-    );
-    Ok(reqwest::blocking::Client::builder()
-        .cookie_provider(jar)
-        .build()
-        .unwrap())
-}
+const DB_PATH: &str = "./.problems";
 
 impl Problems {
-    pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn save(&self) -> Result<()> {
         let _ = std::fs::remove_dir_all("./.problems");
         serde_fs::to_fs(&self, "./.problems")?;
         Ok(())
     }
 
     fn get(&self, day: Day) -> Option<&Data> {
-        if let Some(years) = self.years.get(&day.year) {
-            return years.get(&day.day);
-        }
-        None
+        self.days.get(&day.day)
     }
 
-    pub fn lookup(&mut self, day: Day, part2_required: bool, tests_required: bool) -> Data {
-        match self.try_lookup(day, part2_required, tests_required) {
-            Ok(data) => data,
-            Err(err) => panic!("Failed to download data for {}: {:?}", day, err),
-        }
+    pub fn store(&mut self, day: Day, data: Data) {
+        self.days.insert(day.day, data);
     }
 
-    pub fn try_lookup(
-        &mut self,
-        day: Day,
-        part2_required: bool,
-        tests_required: bool,
-    ) -> Result<Data, Error> {
-        if let Some(data) = self.get(day).cloned() {
-            //We already have the data we need
-            if !part2_required || part2_required && data.part2.is_some() {
-                return Ok(data);
+    pub fn lookup(&mut self, day: Day) -> Result<Data> {
+        if let Some(data) = self.get(day) {
+            let new_data_not_needed = match data.part {
+                Part::Part1 => data.p1_ans.is_none(),
+                Part::Part2 => data.p2_ans.is_none(),
+                Part::Complete => true, // we have the entire web page with answers
+            };
+            if new_data_not_needed && false {
+                // We have the test cases we need for the current part, no need for a request
+                return Ok(data.clone());
             }
         }
         loop {
@@ -304,11 +319,10 @@ impl Problems {
                 continue;
             }
 
-            let (part1, part2) = parse_tests(&desc_body, day, tests_required)?;
+            let (part1, part2, part) = parse_tests(&desc_body, day)?;
+            dbg!(part);
 
-            let years = self.years.entry(day.year).or_insert_with(|| HashMap::new());
-
-            let data = years.entry(day.day).or_insert_with(|| {
+            let data = self.days.entry(day.day).or_insert_with(|| {
                 info!("Downloading input for {}", day);
                 let input_url = format!(
                     "https://adventofcode.com/{}/day/{}/input",
@@ -316,27 +330,35 @@ impl Problems {
                 );
                 let input = client.get(input_url).send().unwrap().text().unwrap();
                 Data {
-                    part1,
+                    p1: part1,
                     //This only runs the first time when part2_tests is None so thats why the clone
                     //is here
-                    part2: part2.clone(),
+                    p2: part2.clone(),
                     input,
+                    p1_ans: None,
+                    p2_ans: None,
+                    part,
                 }
             });
-            data.part2 = part2;
+            data.p2 = part2;
 
-            break Ok(data.clone());
+            let a = data.clone();
+            let _ = self.save();
+            break Ok(a);
         }
     }
 
-    pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
-        Ok(serde_fs::from_fs("./.problems")?)
+    pub fn load() -> anyhow::Result<Self> {
+        Ok(serde_fs::from_fs(DB_PATH)?)
     }
 
-    pub fn new(session: String) -> Self {
-        Self {
-            years: HashMap::new(),
+    pub fn nuke(session: String) -> Result<Self> {
+        let _ = std::fs::remove_dir_all(DB_PATH);
+        let ret = Self {
+            days: HashMap::new(),
             session,
-        }
+        };
+        ret.save()?;
+        Ok(ret)
     }
 }

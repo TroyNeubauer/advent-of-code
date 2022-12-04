@@ -1,7 +1,9 @@
 [workspace]
 members = [
     "util",
+    "parser",
     #"y2020",
     #"y2021",
     "y2022",
+    "y2019",
 ]

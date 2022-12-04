@@ -10,7 +10,6 @@ pub struct Matrix<T> {
 
 impl<T, E> Matrix<T>
 where
-    T: FromStr,
     T: FromStr<Err = E>,
     E: std::fmt::Debug,
     T: Clone,

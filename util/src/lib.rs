@@ -10,4 +10,3 @@ pub use traits::*;
 pub use shifter::*;
 pub use problems::*;
 pub use runner::*;
-

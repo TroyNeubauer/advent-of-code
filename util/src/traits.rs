@@ -1,17 +1,11 @@
-use std::{
-    slice::Split,
-    str::{FromStr, Lines},
-};
-
-pub use std::collections::HashMap;
-
-pub type Error = Box<dyn std::error::Error>;
+use serde::{Deserialize, Serialize};
+use std::str::{FromStr, Lines};
 
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Input(String);
+pub struct Input(pub String);
 
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Output(String);
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Output(pub String);
 
 pub trait AocDay {
     fn part1(&self, input: Input) -> Output;
@@ -43,6 +37,10 @@ impl Input {
         T: FromStr,
     {
         self.lines().filter_map(|line| line.parse::<T>().ok())
+    }
+
+    pub fn ints(&self) -> impl Iterator<Item = i32> + '_ {
+        self.lines().filter_map(|line| line.parse::<i32>().ok())
     }
 
     pub fn lines(&self) -> Lines {
