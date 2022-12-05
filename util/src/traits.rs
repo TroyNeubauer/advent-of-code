@@ -17,30 +17,22 @@ impl Input {
         Self(inner)
     }
 
-    pub fn nums_comma_separated<T>(&self) -> Vec<T>
-    where
-        T: FromStr,
-    {
-        self.0
-            .trim()
-            .split(',')
-            .enumerate()
-            .map(|(i, token)| match token.parse::<T>() {
-                Ok(v) => v,
-                Err(_err) => panic!("Failed to parse `{}` (num #{})", token, i),
-            })
-            .collect()
-    }
-
+    /// Returns an iterator over each line parsed as `T`
+    ///
+    /// # Panics
+    /// This function will panic if any line fails to parse
     pub fn nums<T>(&self) -> impl Iterator<Item = T> + '_
     where
-        T: FromStr,
+        T: FromStr + std::fmt::Debug,
     {
-        self.lines().filter_map(|line| line.parse::<T>().ok())
+        self.lines().map(|line| match line.parse::<T>() {
+            Ok(v) => v,
+            Err(_e) => panic!("failed to parse `{}`", line),
+        })
     }
 
     pub fn ints(&self) -> impl Iterator<Item = i32> + '_ {
-        self.lines().filter_map(|line| line.parse::<i32>().ok())
+        self.nums()
     }
 
     pub fn lines(&self) -> Lines {

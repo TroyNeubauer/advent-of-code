@@ -1,49 +1,34 @@
-use crate::{problems, AocDay, Data, Day, Input, Output, Part, Problems, Test};
+use crate::{problems, AocDay, Data, Day, Input, Output, Problems, Year};
 
-use chrono::Datelike;
 use clap::Parser;
 use log::*;
+use parser::Client;
 
 struct RunData<'a> {
     day: Day,
+    year: Year,
     implementation: &'a dyn AocDay,
     auto_submit: bool,
 }
 
-fn run(problems: &mut Problems, data: RunData) {
-    let year = data.day.year;
-    let day = data.day.day;
+enum RefreshStatus {
+    /// The page must be re-chached
+    RefreshRequired,
+    None,
+}
 
-    let mut day_data = problems.lookup(data.day).unwrap();
+fn run(problems: &mut Problems, data: RunData) -> Result<()> {
+    let year = data.year;
+    let day = data.day;
 
-    let run_part = |day_data: &mut Data, part1, name| {
-        let test = if part1 { &day_data.p1 } else { &day_data.p2 };
-        match test {
-            None => {
-                info!("Not running test for {} {}", day, name);
-                /*
-                if data.auto_submit {
-                    error!("Refusing to auto submit without tests. Please fill in manually");
-                    return;
-                }
-                */
-            }
-            Some(test) => {
-                let input = Input::new(test.input.clone());
-                let output = if part1 {
-                    debug!("Running part 1 test");
-                    let r = data.implementation.part1(input);
-                    debug!("Part 1 test finished");
-                    r
-                } else {
-                    debug!("Running part 2 test");
-                    let r = data.implementation.part2(input);
-                    debug!("Part 2 test finished");
-                    r
-                };
+    let mut client = Client::new(&problems.session).expect("failed to create client");
+    problems.ensure_cached(&mut client, year, day)?;
+    let day_data = problems.get(day).unwrap();
 
-                let expected = test.expected_output.trim();
-                let output = output.into_inner();
+    /*
+    let run_part = |day_data: &Data, part1, name| -> RefreshStatus {
+        day.run_tes
+        
                 info!("test expected: {} got: {}", expected, &output);
                 if expected != output {
                     panic!(
@@ -54,17 +39,9 @@ fn run(problems: &mut Problems, data: RunData) {
                 if data.auto_submit {
                     info!("{} test {} succeeded!", name, expected);
                 }
-            }
-        }
+    */
 
-        let input = Input::new(day_data.input.clone());
-        let output = if part1 {
-            debug!("Running part 1 implementation");
-            data.implementation.part1(input)
-        } else {
-            debug!("Running part 2 implementation");
-            data.implementation.part2(input)
-        };
+        day_data.try_run
         let answer = output.into_inner();
         println!("----------------------------------------");
         println!();
@@ -113,8 +90,6 @@ fn run(problems: &mut Problems, data: RunData) {
                 info!("Wrote html reply dump to `{path}`");
             }
             trace!("Server response: {}", text);
-        }
-    };
     let both_solved = day_data.is_part1_solved() && day_data.is_part2_solved();
     let run_p1 = !data.auto_submit || !day_data.is_part1_solved() || both_solved;
     let run_p2 = !data.auto_submit || day_data.is_part1_solved() || both_solved;
@@ -130,6 +105,32 @@ fn run(problems: &mut Problems, data: RunData) {
     problems.store(data.day, day_data);
 
     problems.save().unwrap();
+}
+
+fn wait_for_time(day: Day) {
+    let now_millis = chrono::Local::now().naive_local().timestamp_millis();
+    // AOC releases at midnight in the eastern american timezone
+    let est = chrono_tz::Tz::America__New_York;
+    // We need to wait for the challenge to start
+    let publish_millis = chrono::NaiveDate::from_ymd_opt(day.year as i32, 12, day.day)
+        .unwrap()
+        .and_hms_opt(0, 0, 0)
+        .unwrap()
+        .and_local_timezone(est)
+        .unwrap()
+        .timestamp_millis();
+
+    // may be negitive if the challenge opened in the past
+    let sleep_time = (publish_millis - now_millis)
+        .try_into()
+        .ok()
+        .map(|millis| StdDuration::from_millis(millis));
+
+    info!("Challenge publishing in {:?}", sleep_time);
+    if let Some(sleep_for) = sleep_time {
+        std::thread::sleep(sleep_for);
+        info!("Awoke for challenge");
+    }
 }
 
 pub fn runner_main(implementation: &dyn AocDay, year: u32, day: u32) {

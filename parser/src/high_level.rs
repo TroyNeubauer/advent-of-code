@@ -1,15 +1,17 @@
 use crate::low_level::{Low, Query};
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use enum_map::{Enum, EnumMap};
 use log::error;
 use select::node::Node;
+use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 
 pub struct AocPage {
     low: Low,
+    stage: ProblemStage,
 }
 
-#[derive(Copy, Clone, Debug, Enum)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, Enum, PartialEq, Eq)]
 pub enum ProblemStage {
     /// Part1 is unsolved, part2 is locked (0 stars)
     Part1,
@@ -19,26 +21,102 @@ pub enum ProblemStage {
     Complete,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum ProblemStageWithAnswers {
+    /// Part1 is unsolved, part2 is locked (0 stars)
+    Part1,
+    /// Part1 is solved, part2 is unsolved (1 stars)
+    Part2 { part1_answer: String },
+    /// Both parts complete (2 stars)
+    Complete {
+        part1_answer: String,
+        part2_answer: String,
+    },
+}
+
 impl AocPage {
     pub fn new(html: &str) -> Result<Self> {
-        Ok(Self {
-            low: Low::new(html)?,
+        let low = Low::new(html)?;
+        let stage = Self::get_problem_stage(&low)?;
+        Ok(Self { low, stage })
+    }
+
+    pub fn test_cases(&self) -> Result<TestCases> {
+        // we assume the first code block in part 1 is the input for both test cases
+        let mut blocks = self.low.code_blocks(Query::Part1);
+        let input = blocks.next().map(|node| node.text());
+
+        // we assume the last code block is the answer for the test case
+        let part1_out = self
+            .low
+            .test_case_answer_blocks(Query::Part1)
+            .last()
+            .map(|node| node.text());
+
+        let part2_out = self
+            .low
+            .test_case_answer_blocks(Query::Part2)
+            .last()
+            .map(|node| node.text());
+
+        Ok(match self.stage {
+            ProblemStage::Part1 => TestCases::Part1 {
+                part1: TestCase {
+                    input,
+                    output: part1_out,
+                },
+            },
+            ProblemStage::Part2 | ProblemStage::Complete => TestCases::Part2 {
+                part1: TestCase {
+                    input: input.clone(),
+                    output: part1_out,
+                },
+                part2: TestCase {
+                    input,
+                    output: part2_out,
+                },
+            },
         })
+    }
+
+    /// Returns the answers storted in current page, based on what has been solved already
+    pub fn answers(&self) -> Result<ProblemStageWithAnswers> {
+        let mut answers = self.low.puzzle_answers();
+        Ok(match self.stage {
+            ProblemStage::Part1 => ProblemStageWithAnswers::Part1,
+            ProblemStage::Part2 => ProblemStageWithAnswers::Part2 {
+                part1_answer: answers
+                    .next()
+                    .ok_or_else(|| anyhow!("missing part 1 answer text"))?,
+            },
+            ProblemStage::Complete => ProblemStageWithAnswers::Complete {
+                part1_answer: answers
+                    .next()
+                    .ok_or_else(|| anyhow!("missing part 1 answer text"))?,
+                part2_answer: answers
+                    .next()
+                    .ok_or_else(|| anyhow!("missing part 2 answer text"))?,
+            },
+        })
+    }
+
+    pub fn embedded_puzzle_input(&self) -> Option<String> {
+        self.low.embedded_puzzle_input()
     }
 
     /// Returns the current stage of the problem
     /// Returns Err if the current stage cannot be deduced
-    pub fn get_problem_stage(&self) -> Result<ProblemStage> {
+    fn get_problem_stage(low: &Low) -> Result<ProblemStage> {
         // We have many different ways of sniffing out what part of the problem we are on.
         // Including:
         // 1. The number of day_success elements
         // 2. The number of parts already solved
         // 3. How many part descriptions there are
 
-        let success: SmallVec<[Node; 2]> = self.low.day_success().collect();
-        let answers: SmallVec<[String; 2]> = self.low.puzzel_answers().collect();
-        let p1 = self.low.p1_node();
-        let p2 = self.low.p2_node();
+        let success: SmallVec<[Node; 2]> = low.day_success().collect();
+        let answers: SmallVec<[String; 2]> = low.puzzle_answers().collect();
+        let p1 = low.p1_node();
+        let p2 = low.p2_node();
 
         let success_stage = match success.get(0) {
             None => Some(ProblemStage::Part1),
@@ -88,65 +166,26 @@ impl AocPage {
             _ => bail!("mutiple winners: {:?}", winners),
         }
     }
-
-    pub fn test_cases(&self) -> Result<TestCases> {
-        let stage = self.get_problem_stage()?;
-        // we assume the first code block in part 1 is the input for both test cases
-        let mut blocks = self.low.code_blocks(Query::Part1);
-        let input = blocks.next().map(|node| node.text());
-
-        // we assume the last code block is the answer for the test case
-        let part1_out = self
-            .low
-            .test_case_answer_blocks(Query::Part1)
-            .last()
-            .map(|node| node.text());
-
-        let part2_out = self
-            .low
-            .test_case_answer_blocks(Query::Part2)
-            .last()
-            .map(|node| node.text());
-
-        Ok(match stage {
-            ProblemStage::Part1 => TestCases::Part1 {
-                part1: TestCase {
-                    input,
-                    output: part1_out,
-                },
-            },
-            ProblemStage::Part2 | ProblemStage::Complete => TestCases::Part2 {
-                part1: TestCase {
-                    input: input.clone(),
-                    output: part1_out,
-                },
-                part2: TestCase {
-                    input,
-                    output: part2_out,
-                },
-            },
-        })
-    }
-
-    pub fn embedded_puzzel_input(&self) -> Option<String> {
-        self.low.embedded_puzzel_input()
-    }
 }
 
 /// Best effort test case data scraped from the page
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum TestCases {
     Part1 { part1: TestCase },
     Part2 { part1: TestCase, part2: TestCase },
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct TestCase {
     pub input: Option<String>,
     pub output: Option<String>,
 }
 
 impl TestCases {
+    pub fn merge(&mut self, other: &Self) -> Result<()> {
+        todo!();
+        Ok(())
+    }
     pub fn has_none(&self) -> bool {
         match &self {
             TestCases::Part1 { part1 } => part1.has_none(),
@@ -194,6 +233,19 @@ impl TestCase {
     }
 }
 
+impl ProblemStageWithAnswers {
+    pub fn merge(&mut self, other: &Self) -> Result<()> {
+        use ProblemStageWithAnswers::*;
+
+        let new_self = match (self.clone(), other) {
+            (Part1, Part2 { .. }) => other.clone(),
+            (us, them) => bail!("cannot reduce state from {us:?} to {them:?}"),
+        };
+        *self = new_self;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -217,32 +269,72 @@ mod tests {
         );
     }
 
+    #[track_caller]
+    fn assert_answers(aoc: &AocPage, p1: &str, p2: &str) {
+        assert_eq!(
+            ProblemStageWithAnswers::Complete {
+                part1_answer: p1.to_owned(),
+                part2_answer: p2.to_owned(),
+            },
+            aoc.answers().unwrap(),
+        );
+    }
+
     #[test_log::test]
     fn day10_2015_part1() {
         let p = AocPage::new(include_str!("../test_files/part1/2015/day10.html")).unwrap();
-        //assert_test_cases(&p, "", "", "");
+
+        assert_eq!(p.answers().unwrap(), ProblemStageWithAnswers::Part1);
         assert!(p.test_cases().unwrap().has_none());
     }
 
     #[test_log::test]
     fn day11_2018_part1() {
         let p = AocPage::new(include_str!("../test_files/part1/2018/day11.html")).unwrap();
-        assert_eq!(p.embedded_puzzel_input().unwrap(), "3031");
+        assert_eq!(p.embedded_puzzle_input().unwrap(), "3031");
 
-        // TODO
+        assert_eq!(p.answers().unwrap(), ProblemStageWithAnswers::Part1);
 
-        // this one is complicated and doesn't contain any easy test cases, but we still want
-        // `answer_blocks` to return all the `<code><em>` blocks so that we don't have seperate
-        // logic from the easy case
+        assert_eq!(
+            p.test_cases().unwrap(),
+            TestCases::Part1 {
+                part1: TestCase {
+                    input: Some(
+                        r#"
+-2  -4   4   4   4
+-4   4   4   4  -5
+ 4   3   3   4  -4
+ 1   1   2   4  -3
+-1   0   2  -5  -2
+"#
+                        .trim_start()
+                        .to_owned()
+                    ),
+                    // TODO: This should be `21,61`, but we accidentally pick up the <code> block
+                    // appearing here `What is the X,Y coordinate of the top-left fuel cell of the
+                    // 3x3 square with the largest total power?`, which asks the main question (not a test case)
+                    // We should be able to ignore the last <em> in each part because this is the
+                    // question
+                    output: Some("X,Y".to_owned()),
+                },
+            }
+        );
     }
 
     #[test_log::test]
     fn day1_2019_part2() {
         let p = AocPage::new(include_str!("../test_files/part2/2019/day1.html")).unwrap();
-        assert!(p.embedded_puzzel_input().is_none());
+        assert!(p.embedded_puzzle_input().is_none());
+
+        assert_eq!(
+            p.answers().unwrap(),
+            ProblemStageWithAnswers::Part2 {
+                part1_answer: "3412531".to_owned(),
+            }
+        );
 
         assert!(p.test_cases().unwrap().has_none());
-        //assert_eq!(l.puzzel_answers().collect::<Vec<_>>(), &["3412531"]);
+        //assert_eq!(l.puzzle_answers().collect::<Vec<_>>(), &["3412531"]);
     }
 
     #[test_log::test]
@@ -263,6 +355,8 @@ forward 2
             "150",
             "900",
         );
+
+        assert_answers(&p, "2039912", "1942068080");
     }
 
     #[test_log::test]
@@ -291,6 +385,8 @@ forward 2
             "24000",
             "45000",
         );
+
+        assert_answers(&p, "71502", "208191");
     }
 
     #[test_log::test]
@@ -308,6 +404,8 @@ C Z
             "15",
             "12",
         );
+
+        assert_answers(&p, "11150", "8295");
     }
 
     #[test_log::test]
@@ -328,12 +426,14 @@ CrZsJsPPZsGzwwsLwLmpwMDw
             "157",
             "70",
         );
+
+        assert_answers(&p, "7428", "2650");
     }
 
     #[test_log::test]
     fn day4_2022_complete() {
         let p = AocPage::new(include_str!("../test_files/complete/2022/day4.html")).unwrap();
-        assert!(p.embedded_puzzel_input().is_none());
+        assert!(p.embedded_puzzle_input().is_none());
 
         assert_test_cases(
             &p,
@@ -349,5 +449,7 @@ CrZsJsPPZsGzwwsLwLmpwMDw
             "2",
             "4",
         );
+
+        assert_answers(&p, "453", "919");
     }
 }

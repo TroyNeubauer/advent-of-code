@@ -98,8 +98,8 @@ impl Low {
         a.chain(b)
     }
 
-    /// Returns all puzzel answers by matching paragraphs with text `Your puzzle answer was:`
-    pub fn puzzel_answers(&self) -> impl Iterator<Item = String> + '_ {
+    /// Returns all puzzle answers by matching paragraphs with text `Your puzzle answer was:`
+    pub fn puzzle_answers(&self) -> impl Iterator<Item = String> + '_ {
         self.doc
             .find(Name("p").descendant(Name("code")))
             .filter_map(|code_node| {
@@ -112,7 +112,7 @@ impl Low {
             })
     }
 
-    pub fn embedded_puzzel_input(&self) -> Option<String> {
+    pub fn embedded_puzzle_input(&self) -> Option<String> {
         self.doc
             .find(Name("code").and(Class("puzzle-input")))
             .next()
@@ -205,7 +205,7 @@ mod tests {
         let l = Low::new(include_str!("../../test_files/part1/2015/day10.html")).unwrap();
         assert!(l.p1_node().is_some());
         assert!(l.p2_node().is_none());
-        assert_eq!(l.embedded_puzzel_input().unwrap(), "1321131112");
+        assert_eq!(l.embedded_puzzle_input().unwrap(), "1321131112");
 
         assert_found_nodes(&[], l.code_blocks(Query::Both));
 
@@ -219,7 +219,7 @@ mod tests {
         let l = Low::new(include_str!("../../test_files/part1/2018/day11.html")).unwrap();
         assert!(l.p1_node().is_some());
         assert!(l.p2_node().is_none());
-        assert_eq!(l.embedded_puzzel_input().unwrap(), "3031");
+        assert_eq!(l.embedded_puzzle_input().unwrap(), "3031");
 
         assert_found_nodes(
             &[
@@ -257,10 +257,10 @@ mod tests {
         let l = Low::new(include_str!("../../test_files/part2/2019/day1.html")).unwrap();
         assert!(l.p1_node().is_some());
         assert!(l.p2_node().is_some());
-        assert!(l.embedded_puzzel_input().is_none());
+        assert!(l.embedded_puzzle_input().is_none());
 
         assert_found_nodes(&[], l.code_blocks(Query::Both));
-        assert_eq!(l.puzzel_answers().collect::<Vec<_>>(), &["3412531"]);
+        assert_eq!(l.puzzle_answers().collect::<Vec<_>>(), &["3412531"]);
 
         assert_found_nodes(&[], l.test_case_answer_blocks(Query::Both));
     }
@@ -270,7 +270,7 @@ mod tests {
         let l = Low::new(include_str!("../../test_files/complete/2021/day2.html")).unwrap();
         assert!(l.p1_node().is_some());
         assert!(l.p2_node().is_some());
-        assert!(l.embedded_puzzel_input().is_none());
+        assert!(l.embedded_puzzle_input().is_none());
 
         assert_found_nodes(
             &[r#"
@@ -293,7 +293,7 @@ forward 2
         let l = Low::new(include_str!("../../test_files/complete/2022/day1.html")).unwrap();
         assert!(l.p1_node().is_some());
         assert!(l.p2_node().is_some());
-        assert!(l.embedded_puzzel_input().is_none());
+        assert!(l.embedded_puzzle_input().is_none());
 
         assert_found_nodes(
             &[r#"
@@ -329,7 +329,7 @@ forward 2
         let l = Low::new(include_str!("../../test_files/complete/2022/day2.html")).unwrap();
         assert!(l.p1_node().is_some());
         assert!(l.p2_node().is_some());
-        assert!(l.embedded_puzzel_input().is_none());
+        assert!(l.embedded_puzzle_input().is_none());
 
         assert_found_nodes(
             &[r#"
@@ -349,7 +349,7 @@ C Z
         let l = Low::new(include_str!("../../test_files/complete/2022/day3.html")).unwrap();
         assert!(l.p1_node().is_some());
         assert!(l.p2_node().is_some());
-        assert!(l.embedded_puzzel_input().is_none());
+        assert!(l.embedded_puzzle_input().is_none());
 
         assert_found_nodes(
             &[
@@ -390,7 +390,7 @@ CrZsJsPPZsGzwwsLwLmpwMDw
         let l = Low::new(include_str!("../../test_files/complete/2022/day4.html")).unwrap();
         assert!(l.p1_node().is_some());
         assert!(l.p2_node().is_some());
-        assert!(l.embedded_puzzel_input().is_none());
+        assert!(l.embedded_puzzle_input().is_none());
 
         assert_found_nodes(
             &[

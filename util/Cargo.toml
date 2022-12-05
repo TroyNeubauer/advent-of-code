@@ -4,28 +4,15 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.66"
-bitset-core = "0.1.1"
-bitstream-io = "1.2.0"
-chrono = "0.4"
-chrono-tz = "0.8.1"
-clap = { version = "3.0.0", features = ["derive"] }
-combine = "4.6.2"
-data-encoding = "2.3.2"
 env_logger = "0.9"
 itertools = "0.10.3"
-libloading = "0.7.2"
 log = "0.4"
-nom = "7.1.0"
 pathfinding = "3.0.5"
-rand = "0.8"
-rayon = "1.5.1"
-reqwest = { version = "0.11.7", default-features = false, features = ["blocking", "cookies", "cookie_store", "rustls-tls"] }
-scanfmt = "0.1"
-select = "0.5"
 serde = { version = "1.0", features = ["derive", "rc"] }
 serde_fs = { path = "../../serde_fs/" }
+parser = { path = "../parser/" }
 text_trees = "0.1.2"
-vector2d = "2.2.0"
-vulkano = { git = "https://github.com/vulkano-rs/vulkano.git", branch = "master" }
-vulkano-shaders = "0.27.1"
+chrono = "0.4.23"
+chrono-tz = "0.8.1"
+clap = { version = "4.0.29", features = ["derive"] }
+anyhow = "1.0.66"
