@@ -17,15 +17,17 @@ pub struct Low {
 }
 
 pub enum Query {
-    /// Queries only within the descriotion of the part 1 problem
+    /// Queries only within the description of the part 1 problem
     Part1,
-    /// Queries only within the descriotion of the part 2 problem
+    /// Queries only within the description of the part 2 problem
     ///
     /// NOTE: Querying for `Part2Only` in a problem that only has part one revealed will yield no
     /// results
     Part2,
     /// Queries in both the part 1 and part 2 descriotions of the problem
     Both,
+    /// Queries the entire html document
+    EntirePage,
 }
 
 /// Returns the p1 and p2 nodes set or not so that `query` is ready to be executed
@@ -34,11 +36,13 @@ macro_rules! prep_query {
         let p1 = match $query {
             Query::Part1 | Query::Both => $this.p1_node(),
             Query::Part2 => None,
+            Query::EntirePage => None,
         };
 
         let p2 = match $query {
             Query::Part1 => None,
             Query::Part2 | Query::Both => $this.p2_node(),
+            Query::EntirePage => None,
         };
 
         p1.into_iter().chain(p2.into_iter())
@@ -85,7 +89,7 @@ impl Low {
 
     /// Returns all code blocks within the scope of query, specifically this function searches for
     /// all `<pre>` tags that contain `<code>` tags inside of `query`
-    pub fn answer_blocks(&self, query: Query) -> impl Iterator<Item = Node<'_>> + '_ {
+    pub fn test_case_answer_blocks(&self, query: Query) -> impl Iterator<Item = Node<'_>> + '_ {
         let a = prep_query!(self, query, f)
             .map(|node| node.find(Name("code").descendant(Name("em"))))
             .flatten();
@@ -96,11 +100,28 @@ impl Low {
         a.chain(b)
     }
 
-    fn embedded_puzzel_input(&self) -> Option<String> {
+    pub fn puzzel_answers(&self) -> impl Iterator<Item = String> + '_ {
+        self.doc
+            .find(Name("p").descendant(Name("code")))
+            .filter_map(|code_node| {
+                let parent = code_node.parent()?;
+                if parent.text().starts_with("Your puzzle answer was") {
+                    Some(code_node.text())
+                } else {
+                    None
+                }
+            })
+    }
+
+    pub fn embedded_puzzel_input(&self) -> Option<String> {
         self.doc
             .find(Name("code").and(Class("puzzle-input")))
             .next()
             .map(|node| node.text())
+    }
+
+    pub fn day_success(&self) -> impl Iterator<Item = Node<'_>> + '_ {
+        self.doc.find(Name("p").and(Class("day-success")))
     }
 }
 
@@ -149,6 +170,7 @@ mod inner {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
 
     #[track_caller]
     fn assert_found_nodes<'a>(strs: &[&str], mut iter: impl Iterator<Item = Node<'a>>) {
@@ -161,16 +183,16 @@ mod tests {
                 (Some(expected), Some(actual)) => {
                     if expected != actual.text() {
                         println!("at index: {i}");
-                        pretty_assertions::assert_eq!(expected, actual.text())
+                        assert_eq!(expected, actual.text())
                     }
                 }
                 (None, Some(actual)) => {
                     println!("found extra value. expected nothing more. value:");
-                    pretty_assertions::assert_eq!("", actual.text())
+                    assert_eq!("", actual.text())
                 }
                 (Some(expected), None) => {
                     println!("expected additional value. expected:");
-                    pretty_assertions::assert_eq!(expected, "")
+                    assert_eq!(expected, "")
                 }
                 (None, None) => break,
             }
@@ -179,9 +201,9 @@ mod tests {
     }
 
     fn assert_test_case_answers(l: &Low, p1: &str, p2: &str) {
-        assert_found_nodes(&[p1], l.answer_blocks(Query::Part1));
-        assert_found_nodes(&[p2], l.answer_blocks(Query::Part2));
-        assert_found_nodes(&[p1, p2], l.answer_blocks(Query::Both));
+        assert_found_nodes(&[p1], l.test_case_answer_blocks(Query::Part1));
+        assert_found_nodes(&[p2], l.test_case_answer_blocks(Query::Part2));
+        assert_found_nodes(&[p1, p2], l.test_case_answer_blocks(Query::Both));
     }
 
     #[test_log::test]
@@ -195,9 +217,9 @@ mod tests {
 
         assert_found_nodes(&[], l.code_blocks(Query::Both));
 
-        assert_found_nodes(&[""], l.answer_blocks(Query::Part1));
-        assert_found_nodes(&[""], l.answer_blocks(Query::Part2));
-        assert_found_nodes(&[""], l.answer_blocks(Query::Both));
+        assert_found_nodes(&[""], l.test_case_answer_blocks(Query::Part1));
+        assert_found_nodes(&[""], l.test_case_answer_blocks(Query::Part2));
+        assert_found_nodes(&[""], l.test_case_answer_blocks(Query::Both));
 
         println!("took {:?}", start.elapsed());
     }
@@ -234,17 +256,34 @@ mod tests {
         // this one is complicated and doesn't contain any easy test cases, but we still want
         // `answer_blocks` to return all the `<code><em>` blocks so that we don't have seperate
         // logic from the easy case
-        let anwsers: Vec<_> = l.answer_blocks(Query::Part1).collect();
+        let anwsers: Vec<_> = l.test_case_answer_blocks(Query::Part1).collect();
         assert_eq!(anwsers.len(), 18);
 
-        assert_found_nodes(&[""], l.answer_blocks(Query::Part2));
+        assert_found_nodes(&[""], l.test_case_answer_blocks(Query::Part2));
     }
 
     #[test_log::test]
-    fn day2_2021_solved() {
+    fn day1_2019_part2() {
         let start = std::time::Instant::now();
 
-        let l = Low::new(include_str!("../../test_files/solved/2021/day2.html")).unwrap();
+        let l = Low::new(include_str!("../../test_files/part2/2019/day1.html")).unwrap();
+        assert!(l.p1_node().is_some());
+        assert!(l.p2_node().is_some());
+        assert!(l.embedded_puzzel_input().is_none());
+
+        assert_found_nodes(&[], l.code_blocks(Query::Both));
+        assert_eq!(l.puzzel_answers().collect::<Vec<_>>(), &["3412531"]);
+
+        assert_found_nodes(&[], l.test_case_answer_blocks(Query::Both));
+
+        println!("took {:?}", start.elapsed());
+    }
+
+    #[test_log::test]
+    fn day2_2021_complete() {
+        let start = std::time::Instant::now();
+
+        let l = Low::new(include_str!("../../test_files/complete/2021/day2.html")).unwrap();
         assert!(l.p1_node().is_some());
         assert!(l.p2_node().is_some());
         assert!(l.embedded_puzzel_input().is_none());
@@ -268,10 +307,10 @@ forward 2
     }
 
     #[test_log::test]
-    fn day1_2022_solved() {
+    fn day1_2022_complete() {
         let start = std::time::Instant::now();
 
-        let l = Low::new(include_str!("../../test_files/solved/2022/day1.html")).unwrap();
+        let l = Low::new(include_str!("../../test_files/complete/2022/day1.html")).unwrap();
         assert!(l.p1_node().is_some());
         assert!(l.p2_node().is_some());
         assert!(l.embedded_puzzel_input().is_none());
@@ -299,18 +338,18 @@ forward 2
 
         assert_found_nodes(
             &["6000", "4000", "11000", "24000", "10000", "24000"],
-            l.answer_blocks(Query::Part1),
+            l.test_case_answer_blocks(Query::Part1),
         );
 
-        assert_found_nodes(&["45000"], l.answer_blocks(Query::Part2));
+        assert_found_nodes(&["45000"], l.test_case_answer_blocks(Query::Part2));
         println!("took {:?}", start.elapsed());
     }
 
     #[test_log::test]
-    fn day2_2022_solved() {
+    fn day2_2022_complete() {
         let start = std::time::Instant::now();
 
-        let l = Low::new(include_str!("../../test_files/solved/2022/day2.html")).unwrap();
+        let l = Low::new(include_str!("../../test_files/complete/2022/day2.html")).unwrap();
         assert!(l.p1_node().is_some());
         assert!(l.p2_node().is_some());
         assert!(l.embedded_puzzel_input().is_none());
@@ -331,10 +370,10 @@ C Z
     }
 
     #[test_log::test]
-    fn day3_2022_solved() {
+    fn day3_2022_complete() {
         let start = std::time::Instant::now();
 
-        let l = Low::new(include_str!("../../test_files/solved/2022/day3.html")).unwrap();
+        let l = Low::new(include_str!("../../test_files/complete/2022/day3.html")).unwrap();
         assert!(l.p1_node().is_some());
         assert!(l.p2_node().is_some());
         assert!(l.embedded_puzzel_input().is_none());
@@ -366,17 +405,20 @@ CrZsJsPPZsGzwwsLwLmpwMDw
             l.code_blocks(Query::Both),
         );
 
-        assert_found_nodes(&["p", "L", "P", "v", "t", "s", "157"], l.answer_blocks(Query::Part1));
-        assert_found_nodes(&["70"], l.answer_blocks(Query::Part2));
+        assert_found_nodes(
+            &["p", "L", "P", "v", "t", "s", "157"],
+            l.test_case_answer_blocks(Query::Part1),
+        );
+        assert_found_nodes(&["70"], l.test_case_answer_blocks(Query::Part2));
 
         println!("took {:?}", start.elapsed());
     }
 
     #[test_log::test]
-    fn day4_2022_solved() {
+    fn day4_2022_complete() {
         let start = std::time::Instant::now();
 
-        let l = Low::new(include_str!("../../test_files/solved/2022/day4.html")).unwrap();
+        let l = Low::new(include_str!("../../test_files/complete/2022/day4.html")).unwrap();
         assert!(l.p1_node().is_some());
         assert!(l.p2_node().is_some());
         assert!(l.embedded_puzzel_input().is_none());
