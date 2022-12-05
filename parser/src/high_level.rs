@@ -1,6 +1,7 @@
 use crate::low_level::{Low, Query};
 use anyhow::{bail, Result};
 use enum_map::{Enum, EnumMap};
+use log::error;
 use select::node::Node;
 use smallvec::SmallVec;
 
@@ -39,11 +40,19 @@ impl AocPage {
         let p1 = self.low.p1_node();
         let p2 = self.low.p2_node();
 
-        let success_stage = if success.is_empty() {
-            Some(ProblemStage::Part1)
-        } else {
-            // could be either part2 or complete so we dont vote
-            None
+        let success_stage = match success.get(0) {
+            None => Some(ProblemStage::Part1),
+            Some(node) => {
+                let text = node.text();
+                if text.starts_with("The first half of this puzzle is complete") {
+                    Some(ProblemStage::Part2)
+                } else if text.starts_with("Both parts of this puzzle are complete") {
+                    Some(ProblemStage::Complete)
+                } else {
+                    error!("unknown day success string: `{}`", text);
+                    None
+                }
+            }
         };
 
         let answers_stage = Some(match answers.len() {

@@ -100,6 +100,7 @@ impl Low {
         a.chain(b)
     }
 
+    /// Returns all puzzel answers by matching paragraphs with text `Your puzzle answer was:`
     pub fn puzzel_answers(&self) -> impl Iterator<Item = String> + '_ {
         self.doc
             .find(Name("p").descendant(Name("code")))
@@ -188,11 +189,11 @@ mod tests {
                 }
                 (None, Some(actual)) => {
                     println!("found extra value. expected nothing more. value:");
-                    assert_eq!("", actual.text())
+                    panic!("{:?}", actual.text())
                 }
                 (Some(expected), None) => {
                     println!("expected additional value. expected:");
-                    assert_eq!(expected, "")
+                    panic!("{:?}", expected)
                 }
                 (None, None) => break,
             }
@@ -208,8 +209,6 @@ mod tests {
 
     #[test_log::test]
     fn day10_2015_part1() {
-        let start = std::time::Instant::now();
-
         let l = Low::new(include_str!("../../test_files/part1/2015/day10.html")).unwrap();
         assert!(l.p1_node().is_some());
         assert!(l.p2_node().is_none());
@@ -217,11 +216,9 @@ mod tests {
 
         assert_found_nodes(&[], l.code_blocks(Query::Both));
 
-        assert_found_nodes(&[""], l.test_case_answer_blocks(Query::Part1));
-        assert_found_nodes(&[""], l.test_case_answer_blocks(Query::Part2));
-        assert_found_nodes(&[""], l.test_case_answer_blocks(Query::Both));
-
-        println!("took {:?}", start.elapsed());
+        assert_found_nodes(&[], l.test_case_answer_blocks(Query::Part1));
+        assert_found_nodes(&[], l.test_case_answer_blocks(Query::Part2));
+        assert_found_nodes(&[], l.test_case_answer_blocks(Query::Both));
     }
 
     #[test_log::test]
@@ -259,13 +256,11 @@ mod tests {
         let anwsers: Vec<_> = l.test_case_answer_blocks(Query::Part1).collect();
         assert_eq!(anwsers.len(), 18);
 
-        assert_found_nodes(&[""], l.test_case_answer_blocks(Query::Part2));
+        assert_found_nodes(&[], l.test_case_answer_blocks(Query::Part2));
     }
 
     #[test_log::test]
     fn day1_2019_part2() {
-        let start = std::time::Instant::now();
-
         let l = Low::new(include_str!("../../test_files/part2/2019/day1.html")).unwrap();
         assert!(l.p1_node().is_some());
         assert!(l.p2_node().is_some());
@@ -275,14 +270,10 @@ mod tests {
         assert_eq!(l.puzzel_answers().collect::<Vec<_>>(), &["3412531"]);
 
         assert_found_nodes(&[], l.test_case_answer_blocks(Query::Both));
-
-        println!("took {:?}", start.elapsed());
     }
 
     #[test_log::test]
     fn day2_2021_complete() {
-        let start = std::time::Instant::now();
-
         let l = Low::new(include_str!("../../test_files/complete/2021/day2.html")).unwrap();
         assert!(l.p1_node().is_some());
         assert!(l.p2_node().is_some());
@@ -302,14 +293,10 @@ forward 2
         );
 
         assert_test_case_answers(&l, "150", "900");
-
-        println!("took {:?}", start.elapsed());
     }
 
     #[test_log::test]
     fn day1_2022_complete() {
-        let start = std::time::Instant::now();
-
         let l = Low::new(include_str!("../../test_files/complete/2022/day1.html")).unwrap();
         assert!(l.p1_node().is_some());
         assert!(l.p2_node().is_some());
@@ -342,13 +329,10 @@ forward 2
         );
 
         assert_found_nodes(&["45000"], l.test_case_answer_blocks(Query::Part2));
-        println!("took {:?}", start.elapsed());
     }
 
     #[test_log::test]
     fn day2_2022_complete() {
-        let start = std::time::Instant::now();
-
         let l = Low::new(include_str!("../../test_files/complete/2022/day2.html")).unwrap();
         assert!(l.p1_node().is_some());
         assert!(l.p2_node().is_some());
@@ -365,14 +349,10 @@ C Z
         );
 
         assert_test_case_answers(&l, "15", "12");
-
-        println!("took {:?}", start.elapsed());
     }
 
     #[test_log::test]
     fn day3_2022_complete() {
-        let start = std::time::Instant::now();
-
         let l = Low::new(include_str!("../../test_files/complete/2022/day3.html")).unwrap();
         assert!(l.p1_node().is_some());
         assert!(l.p2_node().is_some());
@@ -410,14 +390,10 @@ CrZsJsPPZsGzwwsLwLmpwMDw
             l.test_case_answer_blocks(Query::Part1),
         );
         assert_found_nodes(&["70"], l.test_case_answer_blocks(Query::Part2));
-
-        println!("took {:?}", start.elapsed());
     }
 
     #[test_log::test]
     fn day4_2022_complete() {
-        let start = std::time::Instant::now();
-
         let l = Low::new(include_str!("../../test_files/complete/2022/day4.html")).unwrap();
         assert!(l.p1_node().is_some());
         assert!(l.p2_node().is_some());
@@ -459,7 +435,5 @@ CrZsJsPPZsGzwwsLwLmpwMDw
         );
 
         assert_test_case_answers(&l, "2", "4");
-
-        println!("took {:?}", start.elapsed());
     }
 }
