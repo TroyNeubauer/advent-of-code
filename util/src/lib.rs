@@ -1,12 +1,11 @@
-
 mod matrix;
-mod traits;
-mod shifter;
 mod problems;
 mod runner;
+mod shifter;
+mod traits;
 
 pub use matrix::*;
-pub use traits::*;
-pub use shifter::*;
 pub use problems::*;
 pub use runner::*;
+pub use shifter::*;
+pub use traits::*;

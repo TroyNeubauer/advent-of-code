@@ -208,9 +208,17 @@ impl<T> Matrix<T> {
     pub fn wrapping_get(&self, row: isize, col: isize) -> &T {
         let rows = self.rows();
         let cols = self.cols();
-        let row = if row < 0 { row.rem_euclid(rows as isize) as usize } else { row as usize % rows };
-        let col = if row < 0 { col.rem_euclid(cols as isize) as usize } else { col as usize % rows };
-        
+        let row = if row < 0 {
+            row.rem_euclid(rows as isize) as usize
+        } else {
+            row as usize % rows
+        };
+        let col = if row < 0 {
+            col.rem_euclid(cols as isize) as usize
+        } else {
+            col as usize % rows
+        };
+
         self.get(row, col)
     }
 
@@ -351,12 +359,15 @@ impl<T> Matrix<T> {
 }
 
 impl<T> Matrix<T>
-    where usize: From<T>,
-          T: Clone
+where
+    usize: From<T>,
+    T: Clone,
 {
-
-    pub fn pathfind(&self, start: (usize, usize), end: (usize, usize)) -> Option<(Vec<(usize, usize)>, usize)> {
-
+    pub fn pathfind(
+        &self,
+        start: (usize, usize),
+        end: (usize, usize),
+    ) -> Option<(Vec<(usize, usize)>, usize)> {
         let successors = |pos: &(usize, usize)| -> Vec<((usize, usize), usize)> {
             let x = pos.0;
             let y = pos.1;
@@ -385,9 +396,10 @@ impl<T> Matrix<T>
             &start,
             |p| successors(p),
             |p| {
-                isize::abs(p.0 as isize - end.0 as isize) as usize + 
-                isize::abs(p.1 as isize - end.1 as isize) as usize
-            } / 3,
+                (isize::abs(p.0 as isize - end.0 as isize) as usize
+                    + isize::abs(p.1 as isize - end.1 as isize) as usize)
+                    / 3
+            },
             |p| p.0 == end.0 && p.1 == end.1,
         )
     }
