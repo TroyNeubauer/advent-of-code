@@ -6,8 +6,7 @@ use select::{document::Document, predicate::Name};
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Edition {
     /// Pre 2020 challenges don't usually have full test cases
-    Pre2020,
-    Post2020,
+    Post2015,
 }
 
 impl Edition {
@@ -18,7 +17,6 @@ impl Edition {
             .next()
             .map(|title| title.inner_html())?;
 
-        return Some(Edition::Post2020);
         Some(
             if title.contains("2015")
                 || title.contains("2016")
@@ -26,10 +24,11 @@ impl Edition {
                 || title.contains("2018")
                 || title.contains("2019")
                 || title.contains("2020")
+                || title.contains("2021")
+                || title.contains("2022")
+                || title.contains("2023")
             {
-                Edition::Pre2020
-            } else if title.contains("2021") || title.contains("2022") || title.contains("2023") {
-                Edition::Post2020
+                Edition::Post2015
             } else {
                 return None;
             },
@@ -38,6 +37,6 @@ impl Edition {
 
     /// Returns all editions
     pub fn all() -> impl Iterator<Item = Self> {
-        [Self::Pre2020, Self::Post2020].into_iter()
+        [Self::Post2015].into_iter()
     }
 }

@@ -1,9 +1,9 @@
 use anyhow::{anyhow, bail, Result};
-use log::{error, warn};
+use log::warn;
 use select::{
     document::Document,
     node::Node,
-    predicate::{Any, Class, Name, Predicate},
+    predicate::{Class, Name, Predicate},
 };
 
 use super::Edition;
@@ -13,6 +13,7 @@ pub struct Low {
     p1_index: usize,
     p2_index: Option<usize>,
     /// The edition that this was parsed as
+    #[allow(dead_code)]
     edition: Edition,
 }
 
@@ -25,9 +26,8 @@ pub enum Query {
     /// results
     Part2,
     /// Queries in both the part 1 and part 2 descriotions of the problem
+    #[allow(dead_code)]
     Both,
-    /// Queries the entire html document
-    EntirePage,
 }
 
 /// Returns the p1 and p2 nodes set or not so that `query` is ready to be executed
@@ -36,13 +36,11 @@ macro_rules! prep_query {
         let p1 = match $query {
             Query::Part1 | Query::Both => $this.p1_node(),
             Query::Part2 => None,
-            Query::EntirePage => None,
         };
 
         let p2 = match $query {
             Query::Part1 => None,
             Query::Part2 | Query::Both => $this.p2_node(),
-            Query::EntirePage => None,
         };
 
         p1.into_iter().chain(p2.into_iter())
@@ -76,7 +74,7 @@ impl Low {
     }
 
     pub fn p2_node(&self) -> Option<Node<'_>> {
-        self.p2_index.map(|i| self.doc.nth(i)).flatten()
+        self.p2_index.and_then(|i| self.doc.nth(i))
     }
 
     /// Returns all code blocks within the scope of query, specifically this function searches for
@@ -134,16 +132,11 @@ mod inner {
 
     pub fn parse(edition: Edition, doc: Document) -> Result {
         match edition {
-            Edition::Pre2020 => parse_pre_2020(doc),
-            Edition::Post2020 => parse_post_2020(doc),
+            Edition::Post2015 => parse_post_2015(doc),
         }
     }
 
-    fn parse_pre_2020(doc: Document) -> Result {
-        todo!()
-    }
-
-    fn parse_post_2020(doc: Document) -> Result {
+    fn parse_post_2015(doc: Document) -> Result {
         let mut articles = doc.find(Name("article").and(Class("day-desc")));
         let p1_index = articles.next().map(|n| n.index());
         let Some(p1_index) = p1_index else {
@@ -163,7 +156,7 @@ mod inner {
             doc,
             p1_index,
             p2_index,
-            edition: Edition::Post2020,
+            edition: Edition::Post2015,
         })
     }
 }
@@ -175,7 +168,7 @@ mod tests {
 
     #[track_caller]
     fn assert_found_nodes<'a>(strs: &[&str], mut iter: impl Iterator<Item = Node<'a>>) {
-        let mut strs_iter = strs.into_iter();
+        let mut strs_iter = strs.iter();
         let mut i = 0;
         loop {
             let expected = strs_iter.next().copied();
@@ -193,7 +186,7 @@ mod tests {
                 }
                 (Some(expected), None) => {
                     println!("expected additional value. expected:");
-                    panic!("{:?}", expected)
+                    panic!("{expected:?}")
                 }
                 (None, None) => break,
             }

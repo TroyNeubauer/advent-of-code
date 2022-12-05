@@ -73,10 +73,11 @@ impl AocPage {
             ProblemStage::Complete => 0,
         };
 
-        for vote in [success_stage, answers_stage, p1_stage].into_iter() {
-            if let Some(vote) = vote {
-                votes[vote] += 1;
-            }
+        for vote in [success_stage, answers_stage, p1_stage]
+            .into_iter()
+            .flatten()
+        {
+            votes[vote] += 1;
         }
         let winners: SmallVec<[(ProblemStage, u8); 2]> =
             votes.into_iter().filter(|(_, votes)| *votes != 0).collect();
@@ -170,15 +171,15 @@ impl TestCases {
 
     pub fn part1(&self) -> &TestCase {
         match &self {
-            TestCases::Part1 { part1 } => &part1,
-            TestCases::Part2 { part1, part2: _ } => &part1,
+            TestCases::Part1 { part1 } => part1,
+            TestCases::Part2 { part1, part2: _ } => part1,
         }
     }
 
     pub fn part2(&self) -> Option<&TestCase> {
         match &self {
             TestCases::Part1 { part1: _ } => None,
-            TestCases::Part2 { part1: _, part2 } => Some(&part2),
+            TestCases::Part2 { part1: _, part2 } => Some(part2),
         }
     }
 }
@@ -294,8 +295,6 @@ forward 2
 
     #[test_log::test]
     fn day2_2022_complete() {
-        let start = std::time::Instant::now();
-
         let p = AocPage::new(include_str!("../test_files/complete/2022/day2.html")).unwrap();
 
         assert_test_cases(
@@ -309,14 +308,10 @@ C Z
             "15",
             "12",
         );
-
-        println!("took {:?}", start.elapsed());
     }
 
     #[test_log::test]
     fn day3_2022_complete() {
-        let start = std::time::Instant::now();
-
         let p = AocPage::new(include_str!("../test_files/complete/2022/day3.html")).unwrap();
 
         assert_test_cases(
@@ -334,55 +329,25 @@ CrZsJsPPZsGzwwsLwLmpwMDw
             "70",
         );
     }
-    /*
 
-        #[test_log::test]
-        fn day4_2022_complete() {
-            let start = std::time::Instant::now();
+    #[test_log::test]
+    fn day4_2022_complete() {
+        let p = AocPage::new(include_str!("../test_files/complete/2022/day4.html")).unwrap();
+        assert!(p.embedded_puzzel_input().is_none());
 
-            let l = Low::new(include_str!("../../test_files/complete/2022/day4.html")).unwrap();
-            assert!(l.p1_node().is_some());
-            assert!(l.p2_node().is_some());
-            assert!(l.embedded_puzzel_input().is_none());
-
-            assert_found_nodes(
-                &[
-                    r#"
-    2-4,6-8
-    2-3,4-5
-    5-7,7-9
-    2-8,3-7
-    6-6,4-6
-    2-6,4-8
-    "#
-                    .trim_start(),
-                    r#"
-    .234.....  2-4
-    .....678.  6-8
-
-    .23......  2-3
-    ...45....  4-5
-
-    ....567..  5-7
-    ......789  7-9
-
-    .2345678.  2-8
-    ..34567..  3-7
-
-    .....6...  6-6
-    ...456...  4-6
-
-    .23456...  2-6
-    ...45678.  4-8
-    "#
-                    .trim_start(),
-                ],
-                l.code_blocks(Query::Both),
-            );
-
-            assert_test_case_answers(&l, "2", "4");
-
-            println!("took {:?}", start.elapsed());
-        }
-        */
+        assert_test_cases(
+            &p,
+            r#"
+2-4,6-8
+2-3,4-5
+5-7,7-9
+2-8,3-7
+6-6,4-6
+2-6,4-8
+"#
+            .trim_start(),
+            "2",
+            "4",
+        );
+    }
 }
