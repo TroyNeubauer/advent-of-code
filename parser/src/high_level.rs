@@ -183,7 +183,14 @@ pub struct TestCase {
 
 impl TestCases {
     pub fn merge(&mut self, other: &Self) -> Result<()> {
-        todo!();
+        use TestCases::*;
+        match (self.clone(), other.clone()) {
+            (Part1 { part1 }, Part2 { part2, .. }) => *self = Part2 { part1, part2 },
+            (Part2 { .. }, Part1 { .. }) => bail!("test cases cannot be merged backwards"),
+            _ => {
+                // same transition, so nop
+            }
+        }
         Ok(())
     }
     pub fn has_none(&self) -> bool {
@@ -239,6 +246,7 @@ impl ProblemStageWithAnswers {
 
         let new_self = match (self.clone(), other) {
             (Part1, Part2 { .. }) => other.clone(),
+            (Part2 { .. }, Complete { .. }) => other.clone(),
             (us, them) => bail!("cannot reduce state from {us:?} to {them:?}"),
         };
         *self = new_self;

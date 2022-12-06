@@ -213,11 +213,7 @@ impl<T> Matrix<T> {
         } else {
             row as usize % rows
         };
-        let col = if row < 0 {
-            col.rem_euclid(cols as isize) as usize
-        } else {
-            col as usize % rows
-        };
+        let col = col.rem_euclid(cols as isize) as usize;
 
         self.get(row, col)
     }

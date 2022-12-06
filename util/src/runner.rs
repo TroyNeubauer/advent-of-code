@@ -1,8 +1,10 @@
-use crate::{problems, AocDay, Data, Day, Input, Output, Problems, Year};
+use crate::{problems::DB_PATH, AocDay, Data, Day, Problems, Year};
+use std::{ops::BitOrAssign, time::Duration as StdDuration};
 
+use anyhow::Result;
 use clap::Parser;
 use log::*;
-use parser::Client;
+use parser::{Client, Part, ProblemStageWithAnswers, SubmitStatus};
 
 struct RunData<'a> {
     day: Day,
@@ -11,108 +13,115 @@ struct RunData<'a> {
     auto_submit: bool,
 }
 
+#[derive(Copy, Clone, Debug)]
 enum RefreshStatus {
     /// The page must be re-chached
     RefreshRequired,
-    None,
+    NotRequired,
+}
+
+impl BitOrAssign for RefreshStatus {
+    fn bitor_assign(&mut self, rhs: Self) {
+        use RefreshStatus::*;
+        *self = match (*self, rhs) {
+            (RefreshRequired, RefreshRequired) => RefreshRequired,
+            (RefreshRequired, NotRequired) => RefreshRequired,
+            (NotRequired, RefreshRequired) => RefreshRequired,
+            (NotRequired, NotRequired) => NotRequired,
+        };
+    }
 }
 
 fn run(problems: &mut Problems, data: RunData) -> Result<()> {
     let year = data.year;
     let day = data.day;
 
+    let implementation = data.implementation;
     let mut client = Client::new(&problems.session).expect("failed to create client");
     problems.ensure_cached(&mut client, year, day)?;
-    let day_data = problems.get(day).unwrap();
+    let day_data = problems.get_mut(day).unwrap();
 
-    /*
-    let run_part = |day_data: &Data, part1, name| -> RefreshStatus {
-        day.run_tes
-        
-                info!("test expected: {} got: {}", expected, &output);
-                if expected != output {
+    let mut run_part = |day_data: &mut Data, part| -> Result<RefreshStatus> {
+        if let Some((output, expected)) = day_data.run_test(implementation, part) {
+            if let Some(expected) = expected {
+                if expected.as_str() == output.as_str() {
+                    info!("day {} part {} test succeeded!", day, part);
+                    info!("expected {} got {}", expected.as_str(), output.as_str());
+                } else {
                     panic!(
                         "{} test failed:\n  expected `{}`\n  real `{}`",
-                        name, expected, output
+                        part,
+                        expected,
+                        output.as_str()
                     );
                 }
-                if data.auto_submit {
-                    info!("{} test {} succeeded!", name, expected);
-                }
-    */
+            } else {
+                info!("{} test: {}", part, output.as_str());
+            }
+        };
 
-        day_data.try_run
-        let answer = output.into_inner();
+        let answer = day_data.run(implementation, part)?;
         println!("----------------------------------------");
         println!();
-        println!("     {} day {} {} answer: {}", year, day, name, &answer);
+        println!("     {} day {} answer: {}", year, day, answer.as_str());
         println!();
         println!("----------------------------------------");
+        println!();
 
         if data.auto_submit {
-            let url = format!("https://adventofcode.com/{}/day/{}/answer", year, day);
-            info!("Submitting answer {} to {}", &answer, &url);
-
-            let level = if part1 { "1" } else { "2" };
-            let params = [("level", level), ("answer", answer.as_str())];
-            let client = problems::build_client(problems.session.as_str()).unwrap();
-
-            let res = client.post(url).form(&params).send().unwrap();
-
-            let text = res.text().unwrap();
-            let already_submitted = text.contains("You don't seem to be solving the right level");
-            let correct = text.contains("That's the right answer!");
-            let incorrect = text.contains("That's not the right answer.");
-
-            if already_submitted || correct {
-                let sol = if part1 {
-                    info!("Advancing to part 2");
-                    day_data.part = Part::Part2;
-                    &mut day_data.p1_ans
-                } else {
-                    &mut day_data.p2_ans
-                };
-                info!("Saving {answer} as the correct answer");
-                *sol = Some(Output(answer));
+            match client.submit(year.0, day.0, part, answer.as_str())? {
+                SubmitStatus::AlreadySubmitted => println!("Problem already submitted"),
+                SubmitStatus::Correct => {
+                    println!("CORRECT");
+                    // refresh because part 2 test cases are now available
+                    return Ok(RefreshStatus::RefreshRequired);
+                }
+                SubmitStatus::Incorrect => println!("Incorrect"),
+                SubmitStatus::Unknown(s) => {
+                    println!("unknown server responce: {s}");
+                    use rand::Rng;
+                    let num: u32 = rand::thread_rng().gen();
+                    let path = format!("/tmp/aoc_res_reply{}.html", num);
+                    std::fs::write(&path, s)?;
+                    info!("Wrote html reply dump to `{path}`");
+                }
             }
-            if already_submitted {
-                info!("Looks like this problem has already been submitted");
-            } else if correct {
-                println!("That's the right answer!");
-            } else if incorrect {
-                println!("That's not the right answer.");
-            } else {
-                info!("Server returned unknown response: {}", &text);
-                use rand::Rng;
-                let num: u32 = rand::thread_rng().gen();
-                let path = format!("/tmp/aoc_res_reply{}.html", num);
-                std::fs::write(&path, &text).unwrap();
-                info!("Wrote html reply dump to `{path}`");
-            }
-            trace!("Server response: {}", text);
-    let both_solved = day_data.is_part1_solved() && day_data.is_part2_solved();
-    let run_p1 = !data.auto_submit || !day_data.is_part1_solved() || both_solved;
-    let run_p2 = !data.auto_submit || day_data.is_part1_solved() || both_solved;
+        }
+        Ok(RefreshStatus::NotRequired)
+    };
+    let (run_p1, run_p2) = if data.auto_submit {
+        match day_data.answers {
+            ProblemStageWithAnswers::Part1 => (true, false),
+            ProblemStageWithAnswers::Part2 { .. } => (false, true),
+            ProblemStageWithAnswers::Complete { .. } => (true, true),
+        }
+    } else {
+        (true, true)
+    };
 
+    let mut refresh = RefreshStatus::NotRequired;
     if run_p1 {
-        run_part(&mut day_data, true, "part1");
+        refresh |= run_part(day_data, Part::Part1)?;
     }
 
     if run_p2 {
-        run_part(&mut day_data, false, "part2");
+        refresh |= run_part(day_data, Part::Part2)?;
     }
 
-    problems.store(data.day, day_data);
+    if matches!(refresh, RefreshStatus::RefreshRequired) {
+        problems.force_recache(&mut client, year, day)?;
+    }
+    problems.save(DB_PATH).unwrap();
 
-    problems.save().unwrap();
+    Ok(())
 }
 
-fn wait_for_time(day: Day) {
+fn wait_for_time(year: Year, day: Day) {
     let now_millis = chrono::Local::now().naive_local().timestamp_millis();
     // AOC releases at midnight in the eastern american timezone
     let est = chrono_tz::Tz::America__New_York;
     // We need to wait for the challenge to start
-    let publish_millis = chrono::NaiveDate::from_ymd_opt(day.year as i32, 12, day.day)
+    let publish_millis = chrono::NaiveDate::from_ymd_opt(year.0 as i32, 12, day.0 as u32)
         .unwrap()
         .and_hms_opt(0, 0, 0)
         .unwrap()
@@ -120,6 +129,7 @@ fn wait_for_time(day: Day) {
         .unwrap()
         .timestamp_millis();
 
+    dbg!(publish_millis, now_millis);
     // may be negitive if the challenge opened in the past
     let sleep_time = (publish_millis - now_millis)
         .try_into()
@@ -134,31 +144,46 @@ fn wait_for_time(day: Day) {
 }
 
 pub fn runner_main(implementation: &dyn AocDay, year: u32, day: u32) {
+    let year = Year(year);
+    let day = Day(day);
     env_logger::builder()
         .filter(None, LevelFilter::Info)
-        .filter(Some("aoc"), LevelFilter::Trace)
+        .filter(Some("util"), LevelFilter::Trace)
         .init();
     let opts: Opts = Opts::parse();
 
     let mut problems = match opts.session {
         Some(session) => Problems::nuke(session).unwrap(),
-        None => Problems::load().unwrap(),
+        None => {
+            let Ok(p) = Problems::load() else {
+                println!("no existing problem database found");
+                println!("run using `--session` or `-s` to setup database");
+                return;
+            };
+            p
+        }
     };
 
     let auto_submit = opts.run;
 
-    debug!("Running year: {}, day {}", day, year);
-    let day = Day { year, day };
+    debug!("Running year: {}, day {}", year, day);
+
+    if auto_submit {
+        //wait_for_time(year, day);
+    }
 
     let data = RunData {
         day,
+        year,
         implementation,
         auto_submit,
     };
 
-    run(&mut problems, data);
+    if let Err(e) = run(&mut problems, data) {
+        println!("error: {e:?}");
+    }
 
-    problems.save().unwrap();
+    problems.save(DB_PATH).unwrap();
 }
 
 #[derive(Parser)]
@@ -170,6 +195,6 @@ struct Opts {
     run: bool,
 
     /// Stores the given session cookie to the problem database for auto-download and submit later
-    #[clap(long)]
+    #[clap(short, long)]
     session: Option<String>,
 }

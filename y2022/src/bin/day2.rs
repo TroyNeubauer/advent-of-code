@@ -1,5 +1,24 @@
 #![allow(unused_variables, unused_imports)]
 use itertools::*;
+use util::{runner_main, AocDay};
+
+struct Day2;
+
+impl AocDay for Day2 {
+    fn part1(&self, input: util::Input) -> util::Output {
+        rounds(input.as_str())
+            .map(|r| r.score())
+            .sum::<i32>()
+            .into()
+    }
+
+    fn part2(&self, input: util::Input) -> util::Output {
+        rounds(input.as_str())
+            .map(|r| r.to_expected().score())
+            .sum::<i32>()
+            .into()
+    }
+}
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 enum Hand {
@@ -30,7 +49,6 @@ impl Hand {
     }
 
     fn get_win(self) -> Self {
-        println!("need win");
         use Hand::*;
 
         match self {
@@ -40,7 +58,6 @@ impl Hand {
         }
     }
     fn get_loss(self) -> Self {
-        println!("need loss");
         use Hand::*;
 
         match self {
@@ -83,7 +100,6 @@ impl Round {
             Paper => self.opp,
             Scissors => self.opp.get_loss(),
         };
-        dbg!(to_play);
         Self {
             opp: self.opp,
             me: to_play,
@@ -160,15 +176,5 @@ fn rounds(input: &str) -> impl Iterator<Item = Round> + '_ {
 }
 
 fn main() {
-    let input = std::fs::read_to_string("input/day2.txt").unwrap();
-    //println!("1 {}", part1(&input));
-    println!("2 {}", part2(&input));
-}
-
-pub fn part1(input: &str) -> i32 {
-    rounds(input).map(|r| r.score()).sum::<i32>()
-}
-
-pub fn part2(input: &str) -> i32 {
-    rounds(input).map(|r| r.to_expected().score()).sum::<i32>()
+    runner_main(&Day2, 2022, 2);
 }

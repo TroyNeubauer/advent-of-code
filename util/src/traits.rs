@@ -43,6 +43,9 @@ impl Input {
         self.0.as_bytes().split(|&b| b == b'\n')
     }
 
+    pub fn as_bytes(&self) -> &[u8] {
+        self.0.as_bytes()
+    }
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
@@ -64,6 +67,10 @@ where
 impl Output {
     pub fn into_inner(self) -> String {
         self.0
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
     }
 }
 

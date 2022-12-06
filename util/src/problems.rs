@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Context, Result};
 use log::*;
-use parser::{AocPage, Client, ProblemStageWithAnswers, TestCases};
+use parser::{AocPage, Client, Part, ProblemStageWithAnswers, TestCases};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::Entry;
 use std::path::Path;
@@ -41,11 +41,11 @@ pub struct Problems {
     pub session: String,
 }
 
-const DB_PATH: &str = "./.problems";
+pub const DB_PATH: &str = "./.problems";
 
 impl Problems {
     pub fn save(&self, path: impl AsRef<Path>) -> Result<()> {
-        let _ = std::fs::remove_dir_all(path);
+        let _ = std::fs::remove_dir_all(path.as_ref());
         serde_fs::to_fs(&self, path)?;
         Ok(())
     }
@@ -75,6 +75,7 @@ impl Problems {
             match self.force_recache(client, year, day) {
                 Ok(Some(_page)) => {
                     self.save(DB_PATH)?;
+                    break Ok(());
                 }
                 Ok(None) => {
                     warn!("{year} day {day} not available yet");
@@ -83,7 +84,6 @@ impl Problems {
                 }
                 Err(e) => return Err(e),
             }
-            break Ok(());
         }
     }
 
@@ -129,7 +129,7 @@ impl Problems {
                 });
             }
             Entry::Occupied(entry) => {
-                entry.into_mut().merge(&page);
+                entry.into_mut().merge(&page)?;
             }
         };
         Ok(Some(page))
@@ -152,22 +152,22 @@ impl Problems {
     }
 }
 
-pub enum Part {
-    Part1,
-    Part2,
-}
-
 impl Data {
     /// Tries to run the given part using `implementation`, but if no test cases are available this
     /// logs and returns None
-    pub fn run_test(&self, implementation: &dyn AocDay, part: Part) -> Option<(Output, Option<String>)> {
+    /// On success returns Some((test_result, expected_value))
+    pub fn run_test(
+        &self,
+        implementation: &dyn AocDay,
+        part: Part,
+    ) -> Option<(Output, Option<String>)> {
         let test = match part {
             Part::Part1 => Some(self.tests.part1()),
             Part::Part2 => self.tests.part2(),
         };
         test.map(|test| -> Option<_> {
-            let input = Input(test.input?);
-            let expected = test.output;
+            let input = Input(test.clone().input?);
+            let expected = test.output.clone();
 
             let out = match part {
                 Part::Part1 => implementation.part1(input),
@@ -206,7 +206,7 @@ impl Data {
         }
         match errors.len() {
             0 => Ok(()),
-            1 => Err(errors[0]).context("failed to merge page data"),
+            1 => Err(errors.remove(0)).context("failed to merge page data"),
             _ => Err(anyhow!(
                 "failed to merge page data due to mutiple errors: {errors:?}"
             )),
