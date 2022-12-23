@@ -69,21 +69,29 @@ fn run(problems: &mut Problems, data: RunData) -> Result<()> {
         println!();
 
         if data.auto_submit {
-            match client.submit(year.0, day.0, part, answer.as_str())? {
-                SubmitStatus::AlreadySubmitted => println!("Problem already submitted"),
-                SubmitStatus::Correct => {
-                    println!("CORRECT");
-                    // refresh because part 2 test cases are now available
-                    return Ok(RefreshStatus::RefreshRequired);
-                }
-                SubmitStatus::Incorrect => println!("Incorrect"),
-                SubmitStatus::Unknown(s) => {
-                    println!("unknown server responce: {s}");
-                    use rand::Rng;
-                    let num: u32 = rand::thread_rng().gen();
-                    let path = format!("/tmp/aoc_res_reply{}.html", num);
-                    std::fs::write(&path, s)?;
-                    info!("Wrote html reply dump to `{path}`");
+            if day_data.is_answer_already_submitted(&answer.0) {
+                println!("Same incorrect answer");
+                info!("refusing to submit again");
+            } else {
+                match client.submit(year.0, day.0, part, answer.as_str())? {
+                    SubmitStatus::AlreadySubmitted => println!("Problem already submitted"),
+                    SubmitStatus::Correct => {
+                        println!("CORRECT");
+                        // refresh because part 2 test cases are now available
+                        return Ok(RefreshStatus::RefreshRequired);
+                    }
+                    SubmitStatus::Incorrect => {
+                        println!("Incorrect");
+                        day_data.add_incorrect_answer_for_current(answer.into_inner());
+                    }
+                    SubmitStatus::Unknown(s) => {
+                        println!("Unknown server responce");
+                        use rand::Rng;
+                        let num: u32 = rand::thread_rng().gen();
+                        let path = format!("/tmp/aoc_res_reply{}.html", num);
+                        std::fs::write(&path, s)?;
+                        info!("Wrote html reply dump to `{path}`");
+                    }
                 }
             }
         }
@@ -91,7 +99,7 @@ fn run(problems: &mut Problems, data: RunData) -> Result<()> {
     };
     let (run_p1, run_p2) = if data.auto_submit {
         match day_data.answers {
-            ProblemStageWithAnswers::Part1 => (true, false),
+            ProblemStageWithAnswers::Part1 { .. } => (true, false),
             ProblemStageWithAnswers::Part2 { .. } => (false, true),
             ProblemStageWithAnswers::Complete { .. } => (true, true),
         }

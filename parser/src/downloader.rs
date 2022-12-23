@@ -87,7 +87,7 @@ impl Client {
                 SubmitStatus::AlreadySubmitted
             } else if text.contains("That's the right answer!") {
                 SubmitStatus::Correct
-            } else if text.contains("That's not the right answer.") {
+            } else if text.contains("That's not the right answer") {
                 SubmitStatus::Incorrect
             } else {
                 SubmitStatus::Unknown(text)

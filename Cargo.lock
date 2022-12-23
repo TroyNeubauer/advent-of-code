@@ -38,9 +38,11 @@ name = "aoc-2022"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "frequency-btreemap",
  "itertools",
  "scanf",
  "slab_tree",
+ "termcolor",
  "util",
 ]
 
@@ -121,7 +123,7 @@ dependencies = [
  "iana-time-zone",
  "js-sys",
  "num-integer",
- "num-traits",
+ "num-traits 0.2.15",
  "time 0.1.45",
  "wasm-bindgen",
  "winapi",
@@ -390,6 +392,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a9c384f161156f5260c24a097c56119f9be8c798586aecc13afbcbe7b7e26bf8"
 dependencies = [
  "percent-encoding",
+]
+
+[[package]]
+name = "frequency"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b0ac874419286412b290cb85df508ca9aba7c5d6bc5afdd90e1a090a99306717"
+dependencies = [
+ "num-traits 0.1.43",
+]
+
+[[package]]
+name = "frequency-btreemap"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "047998412ea3e8ff1c2030144c9a91594d2c33b817c7b7a5e20629030e35b4a6"
+dependencies = [
+ "frequency",
+ "num-traits 0.1.43",
 ]
 
 [[package]]
@@ -673,7 +694,7 @@ version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "276ec31bcb4a9ee45f58bec6f9ec700ae4cf4f4f8f2fa7e06cb406bd5ffdd770"
 dependencies = [
- "num-traits",
+ "num-traits 0.2.15",
 ]
 
 [[package]]
@@ -865,7 +886,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "225d3389fb3509a24c93f5c29eb6bde2586b98d9f016636dff58d7c6f7569cd9"
 dependencies = [
  "autocfg",
- "num-traits",
+ "num-traits 0.2.15",
+]
+
+[[package]]
+name = "num-traits"
+version = "0.1.43"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92e5113e9fd4cc14ded8e499429f396a20f98c772a47cc8622a736e1ec843c31"
+dependencies = [
+ "num-traits 0.2.15",
 ]
 
 [[package]]
@@ -966,7 +996,7 @@ dependencies = [
  "indexmap",
  "integer-sqrt",
  "itertools",
- "num-traits",
+ "num-traits 0.2.15",
  "rustc-hash",
  "thiserror",
 ]
@@ -1818,6 +1848,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_fs",
+ "termcolor",
 ]
 
 [[package]]

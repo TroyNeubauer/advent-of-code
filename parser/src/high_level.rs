@@ -24,9 +24,16 @@ pub enum ProblemStage {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum ProblemStageWithAnswers {
     /// Part1 is unsolved, part2 is locked (0 stars)
-    Part1,
+    Part1 {
+        #[serde(default)]
+        part1_incorrect_gusses: Vec<String>,
+    },
     /// Part1 is solved, part2 is unsolved (1 stars)
-    Part2 { part1_answer: String },
+    Part2 {
+        part1_answer: String,
+        #[serde(default)]
+        part2_incorrect_gusses: Vec<String>,
+    },
     /// Both parts complete (2 stars)
     Complete {
         part1_answer: String,
@@ -83,11 +90,14 @@ impl AocPage {
     pub fn answers(&self) -> Result<ProblemStageWithAnswers> {
         let mut answers = self.low.puzzle_answers();
         Ok(match self.stage {
-            ProblemStage::Part1 => ProblemStageWithAnswers::Part1,
+            ProblemStage::Part1 => ProblemStageWithAnswers::Part1 {
+                part1_incorrect_gusses: vec![],
+            },
             ProblemStage::Part2 => ProblemStageWithAnswers::Part2 {
                 part1_answer: answers
                     .next()
                     .ok_or_else(|| anyhow!("missing part 1 answer text"))?,
+                part2_incorrect_gusses: vec![],
             },
             ProblemStage::Complete => ProblemStageWithAnswers::Complete {
                 part1_answer: answers
@@ -245,7 +255,7 @@ impl ProblemStageWithAnswers {
         use ProblemStageWithAnswers::*;
 
         let new_self = match (self.clone(), other) {
-            (Part1, Part2 { .. }) => other.clone(),
+            (Part1 { .. }, Part2 { .. }) => other.clone(),
             (Part2 { .. }, Complete { .. }) => other.clone(),
             (us, them) => bail!("cannot reduce state from {us:?} to {them:?}"),
         };
@@ -292,7 +302,12 @@ mod tests {
     fn day10_2015_part1() {
         let p = AocPage::new(include_str!("../test_files/part1/2015/day10.html")).unwrap();
 
-        assert_eq!(p.answers().unwrap(), ProblemStageWithAnswers::Part1);
+        assert_eq!(
+            p.answers().unwrap(),
+            ProblemStageWithAnswers::Part1 {
+                part1_incorrect_gusses: vec![]
+            }
+        );
         assert!(p.test_cases().unwrap().has_none());
     }
 
@@ -301,7 +316,12 @@ mod tests {
         let p = AocPage::new(include_str!("../test_files/part1/2018/day11.html")).unwrap();
         assert_eq!(p.embedded_puzzle_input().unwrap(), "3031");
 
-        assert_eq!(p.answers().unwrap(), ProblemStageWithAnswers::Part1);
+        assert_eq!(
+            p.answers().unwrap(),
+            ProblemStageWithAnswers::Part1 {
+                part1_incorrect_gusses: vec![]
+            }
+        );
 
         assert_eq!(
             p.test_cases().unwrap(),
@@ -338,6 +358,7 @@ mod tests {
             p.answers().unwrap(),
             ProblemStageWithAnswers::Part2 {
                 part1_answer: "3412531".to_owned(),
+                part2_incorrect_gusses: vec![]
             }
         );
 

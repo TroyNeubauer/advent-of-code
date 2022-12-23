@@ -16,3 +16,4 @@ chrono-tz = "0.8.1"
 clap = { version = "4.0.29", features = ["derive"] }
 anyhow = "1.0.66"
 rand = "0.8.5"
+termcolor = "1.1.3"

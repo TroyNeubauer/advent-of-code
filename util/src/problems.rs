@@ -212,4 +212,44 @@ impl Data {
             )),
         }
     }
+
+    pub fn add_incorrect_answer_for_current(&mut self, answer: String) {
+        match &mut self.answers {
+            ProblemStageWithAnswers::Part1 {
+                part1_incorrect_gusses,
+            } => {
+                if !part1_incorrect_gusses.contains(&answer) {
+                    part1_incorrect_gusses.push(answer)
+                }
+            }
+            ProblemStageWithAnswers::Part2 {
+                part1_answer: _,
+                part2_incorrect_gusses,
+            } => {
+                if !part2_incorrect_gusses.contains(&answer) {
+                    part2_incorrect_gusses.push(answer)
+                }
+            }
+            ProblemStageWithAnswers::Complete {
+                part1_answer: _,
+                part2_answer: _,
+            } => {}
+        }
+    }
+
+    pub fn is_answer_already_submitted(&self, answer: &String) -> bool {
+        match &self.answers {
+            ProblemStageWithAnswers::Part1 {
+                part1_incorrect_gusses,
+            } => part1_incorrect_gusses.contains(answer),
+            ProblemStageWithAnswers::Part2 {
+                part1_answer: _,
+                part2_incorrect_gusses,
+            } => part2_incorrect_gusses.contains(&answer),
+            ProblemStageWithAnswers::Complete {
+                part1_answer: _,
+                part2_answer: _,
+            } => false,
+        }
+    }
 }
