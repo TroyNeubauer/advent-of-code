@@ -1,4 +1,4 @@
-use std::{hash::Hash, str::FromStr};
+use std::{hash::Hash, num::TryFromIntError, str::FromStr};
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Matrix<T> {
@@ -93,6 +93,28 @@ impl Matrix<u8> {
         I: Iterator<Item = (usize, usize)>,
     {
         self.print_with_and_highlight(|c| *c as char, spec);
+    }
+
+    /// Returns a matrix that contains all points
+    pub fn from_relative_coords<I>(background_char: u8, it: I) -> Self
+    where
+        I: Iterator<Item = (u8, Point)> + Clone,
+    {
+        let min_row: usize = it.clone().map(|(_, p)| p.row).min().unwrap();
+        let max_row: usize = it.clone().map(|(_, p)| p.row).max().unwrap();
+
+        let min_col: usize = it.clone().map(|(_, p)| p.col).min().unwrap();
+        let max_col: usize = it.clone().map(|(_, p)| p.col).max().unwrap();
+
+        let rows = max_row - min_row + 1;
+        let cols = max_col - min_col + 1;
+
+        let mut result = Matrix::new_with_value(rows, cols, background_char);
+        for (c, point) in it {
+            result.set(point.row - min_row, point.col - min_col, c);
+        }
+
+        result
     }
 }
 
@@ -665,6 +687,156 @@ impl Direction {
     }
 }
 
+/// Converts from the ASCII bytes `b'l', b'L', b'r', b'R', b'u', b'U', b'd', b'D'` to the Up, Down,
+/// Left, or Right directions
+impl TryFrom<u8> for Direction {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        Ok(match value {
+            b'l' | b'L' => Direction::Left,
+            b'r' | b'R' => Direction::Right,
+            b'u' | b'U' => Direction::Up,
+            b'd' | b'D' => Direction::Down,
+            _ => return Err(()),
+        })
+    }
+}
+
+/// Converts from characters `'l', 'L', 'r', 'R', 'u', 'U', 'd', 'D'` to the Up, Down,
+/// Left, or Right directions
+impl TryFrom<char> for Direction {
+    type Error = ();
+
+    fn try_from(value: char) -> Result<Self, Self::Error> {
+        let b: u8 = value.try_into().map_err(|_| ())?;
+        Direction::try_from(b)
+    }
+}
+
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Point {
+    pub row: usize,
+    pub col: usize,
+}
+
+impl Point {
+    pub const fn new(row: usize, col: usize) -> Self {
+        Self { row, col }
+    }
+
+    pub fn offset(self, direction: Direction) -> Self {
+        let (row, col) = direction.offset_coords(self.row, self.col);
+        Self::new(row, col)
+    }
+}
+
+impl std::ops::Sub for Point {
+    type Output = SignedPoint;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        let a: SignedPoint = self.try_into().unwrap();
+        let b: SignedPoint = rhs.try_into().unwrap();
+        a - b
+    }
+}
+
+impl std::ops::Add<SignedPoint> for Point {
+    type Output = Self;
+
+    fn add(self, rhs: SignedPoint) -> Self::Output {
+        Self::new(
+            self.row.checked_add_signed(rhs.row).unwrap(),
+            self.col.checked_add_signed(rhs.col).unwrap(),
+        )
+    }
+}
+
+impl std::ops::Add for Point {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self::new(self.row + rhs.row, self.col + rhs.col)
+    }
+}
+
+impl std::ops::AddAssign<SignedPoint> for Point {
+    fn add_assign(&mut self, rhs: SignedPoint) {
+        *self = *self + rhs
+    }
+}
+
+impl std::ops::AddAssign for Point {
+    fn add_assign(&mut self, rhs: Self) {
+        *self = *self + rhs
+    }
+}
+
+impl TryFrom<Point> for SignedPoint {
+    type Error = TryFromIntError;
+
+    fn try_from(value: Point) -> Result<Self, Self::Error> {
+        Ok(Self {
+            row: value.row.try_into()?,
+            col: value.col.try_into()?,
+        })
+    }
+}
+
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct SignedPoint {
+    pub row: isize,
+    pub col: isize,
+}
+
+impl SignedPoint {
+    pub fn new(row: isize, col: isize) -> Self {
+        Self { row, col }
+    }
+
+    pub fn offset(self, direction: Direction) -> Self {
+        let (row_delta, col_delta) = direction.to_unit_offsets();
+        Self::new(self.row + row_delta, self.col + col_delta)
+    }
+
+    /// Returns true if this point has one zero axis and one non-zero axis
+    pub fn is_axis_aligned(self) -> bool {
+        let row_aligned = self.row == 0 && self.col != 0;
+        let col_aligned = self.row != 0 && self.col == 0;
+        row_aligned || col_aligned
+    }
+
+    pub fn manhattan_distance(self) -> usize {
+        self.row.abs() as usize + self.col.abs() as usize
+    }
+
+    /// Returns the direction that points closest to this point's coordinates.
+    /// Returns None if this is the zero point or if the coordinates are on a diagional
+    pub fn try_to_direction(self) -> Option<Direction> {
+        if self.row > self.col.abs() {
+            return Some(Direction::Down);
+        }
+        if self.row < -self.col.abs() {
+            return Some(Direction::Up);
+        }
+        if self.col > self.row.abs() {
+            return Some(Direction::Right);
+        }
+        if self.col < -self.row.abs() {
+            return Some(Direction::Left);
+        }
+        None
+    }
+}
+
+impl std::ops::Sub for SignedPoint {
+    type Output = SignedPoint;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self::new(self.row - rhs.row, self.col - rhs.col)
+    }
+}
+
 /// A iterator that can be converted to yield (row, col) information along with the cell's value
 pub trait IntoEnumeratedCells<T>: Sized + Iterator<Item = T> + EnumeratedCellsIter {
     fn enumerate_cells(self) -> EnumeratedCells<T, Self>;
@@ -1139,5 +1311,28 @@ mod tests {
         assert!(Direction::direction_between(5, 5, 5, 5).is_none());
         assert!(Direction::direction_between(0, 0, 5, 5).is_none());
         assert!(Direction::direction_between(1, 1, 2, 2).is_none());
+    }
+
+    #[test]
+    fn try_to_direction() {
+        for x in -50..=50 {
+            assert_eq!(SignedPoint::new(x, x).try_to_direction(), None);
+        }
+        assert_eq!(
+            SignedPoint::new(4, 0).try_to_direction(),
+            Some(Direction::Down)
+        );
+        assert_eq!(
+            SignedPoint::new(-3, 0).try_to_direction(),
+            Some(Direction::Up)
+        );
+        assert_eq!(
+            SignedPoint::new(0, 2).try_to_direction(),
+            Some(Direction::Right)
+        );
+        assert_eq!(
+            SignedPoint::new(0, -5).try_to_direction(),
+            Some(Direction::Left)
+        );
     }
 }
