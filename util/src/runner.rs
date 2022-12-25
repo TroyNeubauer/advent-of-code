@@ -124,6 +124,7 @@ fn run(problems: &mut Problems, data: RunData) -> Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
 fn wait_for_time(year: Year, day: Day) {
     let now_millis = chrono::Local::now().naive_local().timestamp_millis();
     // AOC releases at midnight in the eastern american timezone
@@ -162,14 +163,14 @@ pub fn runner_main(implementation: &dyn AocDay, year: u32, day: u32) {
 
     let mut problems = match opts.session {
         Some(session) => Problems::nuke(session).unwrap(),
-        None => {
-            let Ok(p) = Problems::load() else {
-                println!("no existing problem database found");
+        None => match Problems::load() {
+            Ok(p) => p,
+            Err(e) => {
+                println!("no existing problem database found: {e:?}");
                 println!("run using `--session` or `-s` to setup database");
                 return;
-            };
-            p
-        }
+            }
+        },
     };
 
     let auto_submit = opts.run;

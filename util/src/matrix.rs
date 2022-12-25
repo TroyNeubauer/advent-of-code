@@ -1,4 +1,4 @@
-use std::{ops::Range, str::FromStr};
+use std::{hash::Hash, str::FromStr};
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Matrix<T> {
@@ -42,7 +42,7 @@ impl Matrix<u8> {
 
         if data.len() % rows != 0 {
             return Err(format!(
-                "Non rectangular matrix. rows: {}, size: {}",
+                "Non square matrix. rows: {}, size: {}",
                 rows,
                 data.len()
             ));
@@ -65,7 +65,7 @@ impl Matrix<u8> {
 
         if data.len() % rows != 0 {
             return Err(format!(
-                "Non rectangular matrix. rows: {}, size: {}",
+                "Non square matrix. rows: {}, size: {}",
                 rows,
                 data.len()
             ));
@@ -119,7 +119,7 @@ where
 
         if data.len() % rows != 0 {
             return Err(format!(
-                "Non rectangular matrix. rows: {}, size: {}",
+                "Non square matrix. rows: {}, size: {}",
                 rows,
                 data.len()
             ));
@@ -483,6 +483,20 @@ impl<T> Matrix<T> {
         }
     }
 
+    pub fn row(&self, row: usize) -> IterRef<'_, T> {
+        let index = self.index(row, 0);
+        let row_slice = &self.data[index..(index + self.cols())];
+        IterRef::new(row_slice.iter(), self.cols())
+    }
+
+    pub fn first_row(&self) -> IterRef<'_, T> {
+        self.row(0)
+    }
+
+    pub fn last_row(&self) -> IterRef<'_, T> {
+        self.row(self.rows() - 1)
+    }
+
     pub fn traverse(
         &self,
         row: usize,
@@ -548,6 +562,16 @@ impl<T> Matrix<T> {
     }
 }
 
+impl<T> Hash for Matrix<T>
+where
+    T: Hash,
+{
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        state.write_usize(self.cols);
+        self.data.hash(state);
+    }
+}
+
 pub struct HighlightSpec<I>
 where
     I: Iterator<Item = (usize, usize)>,
@@ -598,6 +622,46 @@ impl Direction {
             Direction::Left,
             Direction::Right,
         ]
+    }
+
+    pub fn offset_coords(&self, mut row: usize, mut col: usize) -> (usize, usize) {
+        let dir = self.to_unit_offsets();
+        row = row.checked_add_signed(dir.0).unwrap();
+        col = col.checked_add_signed(dir.1).unwrap();
+        (row, col)
+    }
+
+    pub fn direction_between(
+        from_row: usize,
+        from_col: usize,
+        to_row: usize,
+        to_col: usize,
+    ) -> Option<Direction> {
+        if from_row == to_row {
+            if let Some(to_col) = to_col.checked_sub(1) {
+                if from_col == to_col {
+                    return Some(Direction::Right);
+                }
+            }
+            if let Some(from_col) = from_col.checked_sub(1) {
+                if from_col == to_col {
+                    return Some(Direction::Left);
+                }
+            }
+        }
+        if from_col == to_col {
+            if let Some(to_row) = to_row.checked_sub(1) {
+                if from_row == to_row {
+                    return Some(Direction::Down);
+                }
+            }
+            if let Some(from_row) = from_row.checked_sub(1) {
+                if from_row == to_row {
+                    return Some(Direction::Up);
+                }
+            }
+        }
+        None
     }
 }
 
@@ -966,7 +1030,7 @@ const NEIGHBOR_OFFSETS: [(i8, i8); 8] = [
 ];
 
 /// Relative offest of the 4 directly adjacent neightbors around a cell
-const ADJACENT_NEIGHBOR_OFFSETS: [(i8, i8); 4] = [(1, 0), (-1, 0), (1, 1), (0, -1)];
+const ADJACENT_NEIGHBOR_OFFSETS: [(i8, i8); 4] = [(1, 0), (-1, 0), (0, 1), (0, -1)];
 
 #[cfg(test)]
 mod tests {
@@ -1052,5 +1116,28 @@ mod tests {
 
         let dir = mat.direction_to_center(max_row, 0);
         assert!(dir == Direction::Right || dir == Direction::Up);
+    }
+
+    #[test]
+    fn dir_between() {
+        assert_eq!(
+            Direction::direction_between(0, 0, 0, 1).unwrap(),
+            Direction::Right
+        );
+        assert_eq!(
+            Direction::direction_between(0, 0, 1, 0).unwrap(),
+            Direction::Down
+        );
+        assert_eq!(
+            Direction::direction_between(4, 4, 4, 3).unwrap(),
+            Direction::Left
+        );
+        assert_eq!(
+            Direction::direction_between(4, 4, 3, 4).unwrap(),
+            Direction::Up
+        );
+        assert!(Direction::direction_between(5, 5, 5, 5).is_none());
+        assert!(Direction::direction_between(0, 0, 5, 5).is_none());
+        assert!(Direction::direction_between(1, 1, 2, 2).is_none());
     }
 }

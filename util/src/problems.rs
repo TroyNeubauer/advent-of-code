@@ -167,7 +167,7 @@ impl Data {
         };
         test.map(|test| -> Option<_> {
             let input = Input(test.clone().input?);
-            let expected = test.output.clone();
+            let expected = test.output.as_ref().map(|s| s.trim().to_owned());
 
             let out = match part {
                 Part::Part1 => implementation.part1(input),

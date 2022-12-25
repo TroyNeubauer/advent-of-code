@@ -7,7 +7,10 @@ edition = "2021"
 anyhow = "1.0.66"
 frequency-btreemap = "1.0.0"
 itertools = "0.10.5"
+priority-queue = "1.3.0"
 scanf = "1.2.1"
 slab_tree = "0.3.2"
+smallvec = { version = "1.10.0", features = ["union"] }
 termcolor = "1.1.3"
 util = { path = "../util" }
+

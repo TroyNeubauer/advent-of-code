@@ -9,7 +9,8 @@ itertools = "0.10.3"
 log = "0.4"
 pathfinding = "3.0.5"
 serde = { version = "1.0", features = ["derive", "rc"] }
-serde_fs = { git = " https://github.com/TroyNeubauer/serde_fs.git", rev = "8f3e8825b4b7f878d41a28671dd7a516b5b290fb" }
+#serde_fs = { git = " https://github.com/TroyNeubauer/serde_fs.git", rev = "8f3e8825b4b7f878d41a28671dd7a516b5b290fb" }
+serde_fs = { path = "../../serde_fs/" }
 parser = { path = "../parser/" }
 chrono = "0.4.23"
 chrono-tz = "0.8.1"

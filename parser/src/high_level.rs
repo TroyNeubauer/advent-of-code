@@ -25,13 +25,11 @@ pub enum ProblemStage {
 pub enum ProblemStageWithAnswers {
     /// Part1 is unsolved, part2 is locked (0 stars)
     Part1 {
-        #[serde(default)]
         part1_incorrect_gusses: Vec<String>,
     },
     /// Part1 is solved, part2 is unsolved (1 stars)
     Part2 {
         part1_answer: String,
-        #[serde(default)]
         part2_incorrect_gusses: Vec<String>,
     },
     /// Both parts complete (2 stars)
