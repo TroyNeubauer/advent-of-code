@@ -7,7 +7,7 @@ use std::path::Path;
 
 use std::collections::HashMap;
 
-use crate::{AocDay, Input, Output};
+use crate::{AocDay, Input, IsTest, Output};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Data {
@@ -166,7 +166,7 @@ impl Data {
             Part::Part2 => self.tests.part2(),
         };
         test.map(|test| -> Option<_> {
-            let input = Input(test.clone().input?);
+            let input = Input(test.clone().input?, IsTest::Yes);
             let expected = test.output.as_ref().map(|s| s.trim().to_owned());
 
             let out = match part {
@@ -179,7 +179,7 @@ impl Data {
     }
 
     pub fn run(&self, implementation: &dyn AocDay, part: Part) -> Result<Output> {
-        let input = Input(self.input.clone());
+        let input = Input(self.input.clone(), IsTest::No);
         Ok(match part {
             Part::Part1 => implementation.part1(input),
             Part::Part2 => implementation.part2(input),

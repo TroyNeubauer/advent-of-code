@@ -48,12 +48,16 @@ fn run(problems: &mut Problems, data: RunData) -> Result<()> {
                     info!("day {} part {} test succeeded!", day, part);
                     info!("expected {} got {}", expected.as_str(), output.as_str());
                 } else {
-                    panic!(
-                        "{} test failed:\n  expected `{}`\n  real `{}`",
-                        part,
-                        expected,
-                        output.as_str()
-                    );
+                    if expected.bytes().filter(|&b| b == b'\n').count() > 0 {
+                        pretty_assertions::assert_eq!(expected, output.as_str());
+                    } else {
+                        panic!(
+                            "{} test failed:\n  expected `{}`\n  real `{}`",
+                            part,
+                            expected,
+                            output.as_str()
+                        );
+                    }
                 }
             } else {
                 info!("{} test: {}", part, output.as_str());

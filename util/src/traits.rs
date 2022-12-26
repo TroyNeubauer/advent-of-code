@@ -2,7 +2,19 @@ use serde::{Deserialize, Serialize};
 use std::str::{FromStr, Lines};
 
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Input(pub String);
+pub enum IsTest {
+    Yes,
+    No,
+}
+
+impl IsTest {
+    pub fn is_test(&self) -> bool {
+        matches!(self, IsTest::Yes)
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Input(pub String, pub IsTest);
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Output(pub String);
@@ -13,8 +25,8 @@ pub trait AocDay {
 }
 
 impl Input {
-    pub fn new(inner: String) -> Self {
-        Self(inner)
+    pub fn new(inner: String, is_test: IsTest) -> Self {
+        Self(inner, is_test)
     }
 
     /// Returns an iterator over each line parsed as `T`
@@ -52,15 +64,6 @@ impl Input {
 
     pub fn into_inner(self) -> String {
         self.0
-    }
-}
-
-impl<T> From<T> for Input
-where
-    T: ToString,
-{
-    fn from(s: T) -> Self {
-        Self(s.to_string())
     }
 }
 

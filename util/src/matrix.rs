@@ -116,6 +116,19 @@ impl Matrix<u8> {
 
         result
     }
+
+    pub fn format_as_chars(&self) -> String {
+        let mut s = String::new();
+        for row in 0..self.rows() {
+            for col in 0..self.cols() {
+                s.push(*self.get(row, col) as char);
+            }
+            if row != self.rows() - 1 {
+                s.push('\n');
+            }
+        }
+        s
+    }
 }
 
 impl<T, E> Matrix<T>
