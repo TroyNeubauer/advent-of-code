@@ -1,4 +1,4 @@
-use util::{AocDay, Input, Output, runner_main};
+use util::{runner_main, AocDay, Input, Output};
 
 struct Day5;
 

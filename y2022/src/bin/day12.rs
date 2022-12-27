@@ -5,7 +5,7 @@ struct Day12;
 impl AocDay for Day12 {
     fn part1(&self, i: Input) -> Output {
         let mut mat = Matrix::new_from_chars(i).unwrap();
-        
+
         let start = mat.find(|&v| v == b'S').unwrap();
         let end = mat.find(|&v| v == b'E').unwrap();
         mat.set(start.row, start.col, b'a');

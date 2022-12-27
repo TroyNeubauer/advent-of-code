@@ -67,7 +67,13 @@ fn run(problems: &mut Problems, data: RunData) -> Result<()> {
         let answer = day_data.run(implementation, part)?;
         println!("----------------------------------------");
         println!();
-        println!("     {} day {}, {} answer: {}", year, day, part, answer.as_str());
+        println!(
+            "     {} day {}, {} answer: {}",
+            year,
+            day,
+            part,
+            answer.as_str()
+        );
         println!();
         println!("----------------------------------------");
         println!();
