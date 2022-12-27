@@ -29,6 +29,10 @@ impl Input {
         Self(inner, is_test)
     }
 
+    pub fn is_test(&self) -> bool {
+        matches!(self.1, IsTest::Yes)
+    }
+
     /// Returns an iterator over each line parsed as `T`
     ///
     /// # Panics

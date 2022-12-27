@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use util::{runner_main, AocDay, Direction, Input, Matrix, Output, Point, SignedPoint};
+use util::{runner_main, AocDay, Direction, Input, Output, Point, SignedPoint};
 
 struct Day9;
 
