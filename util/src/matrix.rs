@@ -29,8 +29,9 @@ where
 }
 
 impl Matrix<u8> {
-    pub fn new_from_chars(input: &str) -> Result<Self, String> {
+    pub fn new_from_chars(input: impl AsRef<str>) -> Result<Self, String> {
         let mut rows = 0;
+        let input = input.as_ref();
         let data: Vec<_> = input
             .lines()
             .map(|line| {
@@ -492,6 +493,18 @@ impl<T> Matrix<T> {
             writeln!(buffer).unwrap();
         }
         stdout.print(&buffer).unwrap();
+    }
+
+    /// Returns the point of the first cell that matches `predicate`
+    pub fn find<P>(&self, mut predicate: P) -> Option<Point>
+    where
+        P: FnMut(&T) -> bool,
+    {
+        self.iter()
+            .enumerate_cells()
+            .filter(|(_r, _c, v)| predicate(v))
+            .map(|(r, c, _)| Point::new(r, c))
+            .next()
     }
 
     pub fn map<U, F>(&self, f: F) -> Matrix<U>

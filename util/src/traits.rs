@@ -71,6 +71,12 @@ impl Input {
     }
 }
 
+impl AsRef<str> for Input {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
 impl Output {
     pub fn into_inner(self) -> String {
         self.0

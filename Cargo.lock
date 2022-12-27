@@ -43,6 +43,7 @@ dependencies = [
  "num-bigint",
  "num-integer",
  "num-traits 0.2.15",
+ "pathfinding 4.2.0",
  "priority-queue",
  "scanf",
  "slab_tree",
@@ -1018,6 +1019,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "pathfinding"
+version = "4.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c66505cf9c582f34ae89f6433c16ccc05f88803a36adff59c812188021edee78"
+dependencies = [
+ "fixedbitset",
+ "indexmap",
+ "integer-sqrt",
+ "itertools",
+ "num-traits 0.2.15",
+ "rustc-hash",
+ "thiserror",
+]
+
+[[package]]
 name = "percent-encoding"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1869,7 +1885,7 @@ dependencies = [
  "itertools",
  "log",
  "parser",
- "pathfinding",
+ "pathfinding 3.0.14",
  "pretty_assertions",
  "rand 0.8.5",
  "serde",
