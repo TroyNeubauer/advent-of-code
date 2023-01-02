@@ -2,6 +2,7 @@ use util::{runner_main, AocDay, Input, Output};
 
 struct Day1;
 
+/// This function takes input for day 1 and returns an iterator of the sum of elf calories
 fn elves(input: &str) -> impl Iterator<Item = i32> + '_ {
     input
         .split("\n\n")
